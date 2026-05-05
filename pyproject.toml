@@ -1,0 +1,22 @@
+[project]
+name = "paper-radar"
+version = "0.1.0"
+description = "Compliant cross-disciplinary academic metadata crawler."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "requests>=2.32.0",
+  "pydantic>=2.6.0",
+  "PyYAML>=6.0.0",
+  "feedparser>=6.0.11",
+  "python-dateutil>=2.8.2",
+  "tenacity>=8.2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "--basetemp=.pytest_tmp"

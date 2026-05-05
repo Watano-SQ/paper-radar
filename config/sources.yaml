@@ -1,0 +1,53 @@
+sources:
+  openalex:
+    enabled: true
+    api_key_env: OPENALEX_API_KEY
+    email_env: CONTACT_EMAIL
+    days_back: 14
+    per_query_limit: 10
+    max_total: 50
+    max_queries_per_lane: 1
+
+  arxiv:
+    enabled: true
+    days_back: 14
+    per_query_limit: 10
+    delay_seconds: 3
+    max_total: 30
+    max_queries_per_lane: 1
+
+  crossref:
+    enabled: false
+    email_env: CONTACT_EMAIL
+    days_back: 30
+    per_query_limit: 50
+    max_total: 500
+
+  semantic_scholar:
+    enabled: false
+    api_key_env: S2_API_KEY
+    per_query_limit: 20
+    max_total: 500
+
+  pubmed:
+    enabled: false
+    api_key_env: NCBI_API_KEY
+    email_env: CONTACT_EMAIL
+    days_back: 30
+    per_query_limit: 50
+
+  biorxiv:
+    enabled: false
+    days_back: 14
+    per_query_limit: 100
+
+  openreview:
+    enabled: false
+
+  core:
+    enabled: false
+    api_key_env: CORE_API_KEY
+
+  ieee:
+    enabled: false
+    api_key_env: IEEE_API_KEY

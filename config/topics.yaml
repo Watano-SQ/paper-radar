@@ -1,0 +1,64 @@
+lanes:
+  core_embodied_ai:
+    keywords:
+      - embodied intelligence
+      - embodied AI
+      - robot learning
+      - robotic manipulation
+      - reinforcement learning robotics
+      - world model robotics
+      - visuomotor policy
+      - foundation models robotics
+    arxiv_categories:
+      - cs.RO
+      - cs.AI
+      - cs.LG
+      - cs.CV
+
+  math_physics_cs:
+    keywords:
+      - dynamical systems
+      - control theory
+      - information theory
+      - category theory
+      - complexity theory
+      - statistical physics
+      - optimization
+    arxiv_categories:
+      - math.OC
+      - math.DS
+      - cs.IT
+      - cs.CC
+      - physics.comp-ph
+
+  neuro_cognitive:
+    keywords:
+      - computational neuroscience
+      - cognitive neuroscience
+      - neural coding
+      - predictive coding
+      - brain computer interface
+      - hippocampus memory
+    arxiv_categories:
+      - q-bio.NC
+      - cs.NE
+
+  language_symbol:
+    keywords:
+      - semiotics
+      - symbol grounding
+      - cognitive linguistics
+      - language evolution
+      - syntax semantics
+      - narrative theory
+    arxiv_categories:
+      - cs.CL
+
+  humanities_social:
+    keywords:
+      - philosophy of mind
+      - political order
+      - institutional economics
+      - historical explanation
+      - literary theory
+      - social theory

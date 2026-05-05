@@ -1,0 +1,11 @@
+.venv/
+.pytest_tmp/
+.pytest_cache/
+__pycache__/
+*.pyc
+data/papers.sqlite
+data/raw/*
+!data/raw/.gitkeep
+data/exports/*.jsonl
+!data/exports/.gitkeep
+logs/*.log
