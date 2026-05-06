@@ -19,15 +19,18 @@ sources:
   crossref:
     enabled: false
     email_env: CONTACT_EMAIL
-    days_back: 30
     per_query_limit: 50
-    max_total: 500
+    delay_seconds: 1
+    max_total: 200
+    title_fallback: false
 
   semantic_scholar:
     enabled: false
     api_key_env: S2_API_KEY
     per_query_limit: 20
-    max_total: 500
+    delay_seconds: 1
+    max_total: 200
+    title_fallback: false
 
   pubmed:
     enabled: false

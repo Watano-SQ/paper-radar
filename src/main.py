@@ -11,9 +11,12 @@ import yaml
 from src.pipeline.export import export_jsonl
 from src.pipeline.logging_utils import setup_logging
 from src.pipeline.store import PaperStore
+from src.pipeline.dedup import detect_possible_duplicates
 from src.sources.arxiv import ArxivClient
 from src.sources.base import SourceQuery
+from src.sources.crossref import CrossrefClient
 from src.sources.openalex import OpenAlexClient
+from src.sources.semantic_scholar import SemanticScholarClient
 from src.utils.dates import iso_week_label
 
 
@@ -39,6 +42,28 @@ def main() -> None:
             client = client_cls(config, ROOT / "data" / "raw")
             collected_ids.update(run_source(client, config, topics_config, store, logger))
 
+        collected_ids.update(
+            run_enrichment(
+                "crossref",
+                CrossrefClient,
+                sources_config.get("crossref", {}),
+                store,
+                collected_ids,
+                logger,
+            )
+        )
+        collected_ids.update(
+            run_enrichment(
+                "semantic_scholar",
+                SemanticScholarClient,
+                sources_config.get("semantic_scholar", {}),
+                store,
+                collected_ids,
+                logger,
+            )
+        )
+        detect_and_store_duplicates(store, collected_ids, logger)
+
         output_path = ROOT / "data" / "exports" / f"candidates_{iso_week_label()}.jsonl"
         exported = export_jsonl(store.fetch_paper_items(collected_ids), output_path)
         logger.info("exported=%s path=%s", exported, output_path)
@@ -61,10 +86,12 @@ def run_source(
             break
         remaining = max_total - total_seen
         query = replace(query, limit=min(int(query.limit or remaining), remaining))
+        run_id = store.start_crawl_run(source=client.name, query=query.label)
         try:
             raw_items = client.fetch(query)
         except Exception as exc:  # noqa: BLE001 - source/query isolation is intentional
             logger.exception("source=%s query=%s failed: %s", client.name, query.label, exc)
+            store.fail_crawl_run(run_id, error=str(exc))
             continue
 
         new_count = 0
@@ -85,6 +112,11 @@ def run_source(
                     exc,
                 )
         total_seen += normalized_count
+        store.finish_crawl_run(
+            run_id,
+            items_found=len(raw_items),
+            items_new=new_count,
+        )
         logger.info(
             "source=%s query=%s fetched=%s stored=%s new=%s",
             client.name,
@@ -94,6 +126,80 @@ def run_source(
             new_count,
         )
     return collected_ids
+
+
+def run_enrichment(
+    source_name: str,
+    client_cls: Any,
+    config: dict[str, Any],
+    store: PaperStore,
+    collected_ids: set[str],
+    logger: logging.Logger,
+) -> set[str]:
+    if not config.get("enabled", False):
+        logger.info("source=%s skipped because it is disabled", source_name)
+        return set()
+    client = client_cls(config, ROOT / "data" / "raw")
+    max_total = int(config.get("max_total", 200))
+    updated_ids: set[str] = set()
+    candidates = _enrichment_candidates(source_name, store.fetch_paper_items(collected_ids))
+    for item in candidates[:max_total]:
+        query_label = _enrichment_query_label(source_name, item)
+        run_id = store.start_crawl_run(source=source_name, query=query_label)
+        try:
+            enriched = client.enrich_item(item)
+            if enriched is None:
+                store.finish_crawl_run(run_id, items_found=0, items_new=0, status="skipped")
+                continue
+            is_new = store.upsert_paper(enriched)
+            updated_ids.add(enriched.canonical_id)
+            store.finish_crawl_run(run_id, items_found=1, items_new=1 if is_new else 0)
+            logger.info(
+                "source=%s query=%s enriched=%s",
+                source_name,
+                query_label,
+                enriched.canonical_id,
+            )
+        except Exception as exc:  # noqa: BLE001 - enrichment is per-record and isolated
+            logger.exception("source=%s query=%s enrichment failed: %s", source_name, query_label, exc)
+            store.fail_crawl_run(run_id, error=str(exc))
+    return updated_ids
+
+
+def detect_and_store_duplicates(
+    store: PaperStore,
+    collected_ids: set[str],
+    logger: logging.Logger,
+) -> None:
+    current_items = store.fetch_paper_items(collected_ids)
+    all_items = store.list_papers_for_duplicate_check()
+    matches = detect_possible_duplicates(current_items, all_items)
+    inserted = 0
+    for match in matches:
+        if store.record_possible_duplicate(
+            left_id=match.left_id,
+            right_id=match.right_id,
+            reason=match.reason,
+            score=match.score,
+        ):
+            inserted += 1
+    logger.info("possible_duplicates detected=%s new=%s", len(matches), inserted)
+
+
+def _enrichment_candidates(source_name: str, items: list[Any]) -> list[Any]:
+    if source_name == "crossref":
+        return [item for item in items if item.doi]
+    if source_name == "semantic_scholar":
+        return [item for item in items if item.doi or item.arxiv_id]
+    return []
+
+
+def _enrichment_query_label(source_name: str, item: Any) -> str:
+    if source_name == "crossref":
+        return f"doi:{item.doi}"
+    if item.doi:
+        return f"doi:{item.doi}"
+    return f"arxiv:{item.arxiv_id}"
 
 
 def build_queries(

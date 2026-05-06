@@ -2,11 +2,21 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from src.models.paper import PaperItem
 from src.utils.dates import utc_now_iso
+
+
+@dataclass(slots=True)
+class StoredPaperLite:
+    canonical_id: str
+    title: str
+    authors: list[str]
+    year: int | None
 
 
 class PaperStore:
@@ -66,6 +76,28 @@ class PaperStore:
               UNIQUE(source, source_id),
               FOREIGN KEY(canonical_id) REFERENCES papers(canonical_id)
             );
+
+            CREATE TABLE IF NOT EXISTS crawl_runs (
+              run_id TEXT PRIMARY KEY,
+              started_at TEXT NOT NULL,
+              finished_at TEXT,
+              source TEXT,
+              query TEXT,
+              status TEXT,
+              items_found INTEGER DEFAULT 0,
+              items_new INTEGER DEFAULT 0,
+              error TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS possible_duplicates (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              left_id TEXT NOT NULL,
+              right_id TEXT NOT NULL,
+              reason TEXT,
+              score REAL,
+              detected_at TEXT NOT NULL,
+              UNIQUE(left_id, right_id)
+            );
             """
         )
         self.conn.commit()
@@ -97,6 +129,94 @@ class PaperStore:
     def count_papers(self) -> int:
         row = self.conn.execute("SELECT COUNT(*) AS count FROM papers").fetchone()
         return int(row["count"])
+
+    def start_crawl_run(self, *, source: str, query: str) -> str:
+        run_id = str(uuid.uuid4())
+        self.conn.execute(
+            """
+            INSERT INTO crawl_runs (run_id, started_at, source, query, status)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (run_id, utc_now_iso(), source, query, "running"),
+        )
+        self.conn.commit()
+        return run_id
+
+    def finish_crawl_run(
+        self,
+        run_id: str,
+        *,
+        items_found: int,
+        items_new: int,
+        status: str = "success",
+    ) -> None:
+        self.conn.execute(
+            """
+            UPDATE crawl_runs
+            SET finished_at = ?, status = ?, items_found = ?, items_new = ?, error = NULL
+            WHERE run_id = ?
+            """,
+            (utc_now_iso(), status, items_found, items_new, run_id),
+        )
+        self.conn.commit()
+
+    def fail_crawl_run(
+        self,
+        run_id: str,
+        *,
+        error: str,
+        items_found: int = 0,
+        items_new: int = 0,
+    ) -> None:
+        self.conn.execute(
+            """
+            UPDATE crawl_runs
+            SET finished_at = ?, status = ?, items_found = ?, items_new = ?, error = ?
+            WHERE run_id = ?
+            """,
+            (utc_now_iso(), "failed", items_found, items_new, error, run_id),
+        )
+        self.conn.commit()
+
+    def get_crawl_run(self, run_id: str) -> sqlite3.Row | None:
+        return self.conn.execute(
+            "SELECT * FROM crawl_runs WHERE run_id = ?",
+            (run_id,),
+        ).fetchone()
+
+    def list_papers_for_duplicate_check(self) -> list[StoredPaperLite]:
+        rows = self.conn.execute(
+            "SELECT canonical_id, title, authors_json, year FROM papers"
+        ).fetchall()
+        return [
+            StoredPaperLite(
+                canonical_id=row["canonical_id"],
+                title=row["title"],
+                authors=_load_json(row["authors_json"], []),
+                year=row["year"],
+            )
+            for row in rows
+        ]
+
+    def record_possible_duplicate(
+        self,
+        *,
+        left_id: str,
+        right_id: str,
+        reason: str,
+        score: float,
+    ) -> bool:
+        ordered_left, ordered_right = sorted([left_id, right_id])
+        cursor = self.conn.execute(
+            """
+            INSERT OR IGNORE INTO possible_duplicates (
+              left_id, right_id, reason, score, detected_at
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (ordered_left, ordered_right, reason, score, utc_now_iso()),
+        )
+        self.conn.commit()
+        return cursor.rowcount > 0
 
     def _insert_paper(self, item: PaperItem) -> None:
         now = item.fetched_at or utc_now_iso()
