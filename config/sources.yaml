@@ -27,6 +27,7 @@ sources:
   semantic_scholar:
     enabled: false
     api_key_env: S2_API_KEY
+    require_api_key: true
     per_query_limit: 20
     delay_seconds: 1
     max_total: 200

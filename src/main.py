@@ -140,6 +140,10 @@ def run_enrichment(
         logger.info("source=%s skipped because it is disabled", source_name)
         return set()
     client = client_cls(config, ROOT / "data" / "raw")
+    unavailable_reason = getattr(client, "unavailable_reason", None)
+    if unavailable_reason:
+        logger.warning("source=%s skipped: %s", source_name, unavailable_reason)
+        return set()
     max_total = int(config.get("max_total", 200))
     updated_ids: set[str] = set()
     candidates = _enrichment_candidates(source_name, store.fetch_paper_items(collected_ids))

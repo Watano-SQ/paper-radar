@@ -33,6 +33,7 @@ Crossref 和 Semantic Scholar 在当前版本中是 enrichment source，不是�
 - Crossref 默认不做 title search
 - Semantic Scholar 只处理已有 DOI 或 arXiv ID 的条目
 - Semantic Scholar 默认不做 title search
+- Semantic Scholar 默认要求 `S2_API_KEY`；如果开启但没有 key，会跳过并记录 warning
 - enrichment 失败只会记录日志和 `crawl_runs`，不会中断整体流程
 
 ## 当前不做什么
@@ -123,18 +124,17 @@ $env:S2_API_KEY="your_semantic_scholar_api_key"
 $env:OPENALEX_API_KEY="your_openalex_api_key"
 ```
 
-没有 `S2_API_KEY` 时，Semantic Scholar client 会自动降低请求频率。
+默认配置下，Semantic Scholar 的 `require_api_key: true`。没有 `S2_API_KEY` 时，即使 `semantic_scholar.enabled: true`，程序也会跳过 Semantic Scholar enrichment，避免无 key 模式连续请求导致 429。
 
 ### 5. 本地运行
 
-普通 Python 环境：
+推荐使用 `uv` 管理依赖和运行命令。第一次使用：
 
 ```bash
-pip install -r requirements.txt
-python -m src.main
+uv sync --extra dev
 ```
 
-使用 `uv`：
+运行抓取：
 
 ```bash
 uv run python -m src.main
@@ -142,17 +142,25 @@ uv run python -m src.main
 
 ### 6. 运行测试
 
-普通 Python 环境：
-
 ```bash
-pytest
+uv run --extra dev pytest -q
 ```
 
-使用 `uv`：
+### 7. 检查本地数据状态
+
+运行只读 diagnostics 命令：
 
 ```bash
-uv run --extra dev pytest
+uv run python -m src.diagnostics
 ```
+
+它会输出：
+
+- `papers` 数量
+- `paper_sources` 数量
+- `crawl_runs` 按 source/status 分组
+- `possible_duplicates` 数量
+- 最新 JSONL export 文件路径
 
 ## 输出文件
 

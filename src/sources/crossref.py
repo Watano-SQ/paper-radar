@@ -12,7 +12,7 @@ from src.pipeline.normalize import finalize_paper_item
 from src.pipeline.rate_limit import RateLimiter
 from src.sources.base import JsonSourceClient, RawItem, SourceQuery, fetched_now
 from src.utils.dates import to_iso_date, year_from_date
-from src.utils.http import build_user_agent, request_json
+from src.utils.http import HttpStatusError, build_user_agent, request_json
 from src.utils.ids import normalize_doi
 from src.utils.text import clean_text
 
@@ -33,13 +33,18 @@ class CrossrefClient(JsonSourceClient):
         self.rate_limiter.wait()
         query = SourceQuery(lane="enrichment", query=normalized_doi, query_type="doi", limit=1)
         params = {"mailto": self.contact_email} if self.contact_email else None
-        response = request_json(
-            self.session,
-            "GET",
-            f"{self.base_url}/{quote(normalized_doi, safe='')}",
-            params=params,
-            headers={"User-Agent": build_user_agent(self.contact_email)},
-        )
+        try:
+            response = request_json(
+                self.session,
+                "GET",
+                f"{self.base_url}/{quote(normalized_doi, safe='')}",
+                params=params,
+                headers={"User-Agent": build_user_agent(self.contact_email)},
+            )
+        except HttpStatusError as exc:
+            if exc.status_code == 404:
+                return None
+            raise
         raw_path = self.save_raw(response, self.name, query, page=1)
         message = response.get("message") or {}
         return RawItem(

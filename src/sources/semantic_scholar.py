@@ -40,22 +40,39 @@ class SemanticScholarClient(JsonSourceClient):
     def __init__(self, config: dict[str, Any], raw_dir: Path, session: requests.Session | None = None):
         super().__init__(config, raw_dir, session)
         self.api_key = os.getenv(config.get("api_key_env", "S2_API_KEY"), "")
+        self.require_api_key = bool(config.get("require_api_key", True))
         configured_delay = float(config.get("delay_seconds", 1))
         self.rate_limiter = RateLimiter(configured_delay if self.api_key else max(configured_delay, 3.0))
 
+    @property
+    def is_available(self) -> bool:
+        return bool(self.api_key) or not self.require_api_key
+
+    @property
+    def unavailable_reason(self) -> str | None:
+        if self.is_available:
+            return None
+        return "S2_API_KEY is required because semantic_scholar.require_api_key=true"
+
     def fetch_by_doi(self, doi: str) -> RawItem | None:
+        if not self.is_available:
+            return None
         normalized_doi = normalize_doi(doi)
         if not normalized_doi:
             return None
         return self._fetch_identifier(f"DOI:{normalized_doi}", "doi", normalized_doi)
 
     def fetch_by_arxiv_id(self, arxiv_id: str) -> RawItem | None:
+        if not self.is_available:
+            return None
         normalized_arxiv_id = normalize_arxiv_id(arxiv_id)
         if not normalized_arxiv_id:
             return None
         return self._fetch_identifier(f"ARXIV:{normalized_arxiv_id}", "arxiv", normalized_arxiv_id)
 
     def enrich_item(self, item: PaperItem) -> PaperItem | None:
+        if not self.is_available:
+            return None
         raw: RawItem | None = None
         if item.doi:
             raw = self.fetch_by_doi(item.doi)

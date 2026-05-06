@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import requests
+
 from src.models.paper import PaperItem
 from src.sources.base import RawItem, SourceQuery
 from src.sources.crossref import CrossrefClient
@@ -46,6 +48,13 @@ def test_crossref_normalize_response(tmp_path: Path) -> None:
     assert item.license == "https://creativecommons.org/licenses/by/4.0/"
 
 
+def test_crossref_404_returns_none(tmp_path: Path) -> None:
+    session = _FakeSession(status_code=404, payload={"status": "failed"})
+    client = CrossrefClient({"delay_seconds": 0}, tmp_path, session=session)
+    assert client.fetch_by_doi("10.1000/missing") is None
+    assert len(session.requests) == 1
+
+
 def test_semantic_scholar_normalize_doi_response(tmp_path: Path) -> None:
     base = PaperItem(
         canonical_id="doi:10.1000/example",
@@ -88,6 +97,24 @@ def test_semantic_scholar_normalize_doi_response(tmp_path: Path) -> None:
     assert item.pdf_url == "https://example.org/paper.pdf"
 
 
+def test_semantic_scholar_requires_api_key_by_default(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("S2_API_KEY", raising=False)
+    session = _ExplodingSession()
+    client = SemanticScholarClient({"delay_seconds": 0, "require_api_key": True}, tmp_path, session=session)
+    base = PaperItem(
+        canonical_id="arxiv:2501.12345",
+        source="arxiv",
+        source_id="2501.12345",
+        arxiv_id="2501.12345",
+        title="Arxiv Paper",
+        authors=["Ada Lovelace"],
+        fetched_at="2026-05-04T00:00:00+00:00",
+    )
+    assert client.is_available is False
+    assert client.unavailable_reason is not None
+    assert client.enrich_item(base) is None
+
+
 def test_semantic_scholar_normalize_arxiv_response_preserves_base_id(tmp_path: Path) -> None:
     base = PaperItem(
         canonical_id="arxiv:2501.12345",
@@ -119,3 +146,33 @@ def test_semantic_scholar_normalize_arxiv_response_preserves_base_id(tmp_path: P
     assert item.canonical_id == "arxiv:2501.12345"
     assert item.arxiv_id == "2501.12345"
     assert item.semantic_scholar_id == "S2-2"
+
+
+class _FakeSession:
+    def __init__(self, status_code: int, payload: dict):
+        self.status_code = status_code
+        self.payload = payload
+        self.requests: list[dict] = []
+
+    def request(self, method, url, params=None, headers=None, timeout=None):
+        self.requests.append(
+            {
+                "method": method,
+                "url": url,
+                "params": params,
+                "headers": headers,
+                "timeout": timeout,
+            }
+        )
+        response = requests.Response()
+        response.status_code = self.status_code
+        response.url = url
+        response._content = b"{}"
+        response.headers["content-type"] = "application/json"
+        response.json = lambda: self.payload
+        return response
+
+
+class _ExplodingSession:
+    def request(self, *args, **kwargs):
+        raise AssertionError("Semantic Scholar should not issue requests without an API key")
