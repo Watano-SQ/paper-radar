@@ -14,8 +14,10 @@ from src.pipeline.store import PaperStore
 from src.pipeline.dedup import detect_possible_duplicates
 from src.sources.arxiv import ArxivClient
 from src.sources.base import SourceQuery
+from src.sources.biorxiv import BiorxivClient, MedrxivClient
 from src.sources.crossref import CrossrefClient
 from src.sources.openalex import OpenAlexClient
+from src.sources.pubmed import PubMedClient
 from src.sources.semantic_scholar import SemanticScholarClient
 from src.utils.dates import iso_week_label
 
@@ -34,6 +36,9 @@ def main() -> None:
         for source_name, client_cls in {
             "openalex": OpenAlexClient,
             "arxiv": ArxivClient,
+            "pubmed": PubMedClient,
+            "biorxiv": BiorxivClient,
+            "medrxiv": MedrxivClient,
         }.items():
             config = sources_config.get(source_name, {})
             if not config.get("enabled", False):

@@ -1,200 +1,233 @@
 # Paper Radar
 
-Paper Radar 是一个合规的跨学科学术材料元数据抓取项目。
+Paper Radar is a compliant cross-disciplinary academic metadata radar for personal use.
 
-当前版本是 V0.5：从官方 API / 公开接口抓取论文或学术材料的元数据，统一成 `PaperItem`，写入 SQLite，做少量 DOI / 引用元数据补全，标记疑似重复，并导出 JSONL 候选集。
+The current version is V0.6. It collects recent academic metadata from official APIs and public APIs, normalizes records into one `PaperItem` model, stores them in SQLite, exports a JSONL candidate pool, and can generate a lightweight weekly Markdown candidate report.
 
-## 当前能做什么
+It is not a general-purpose crawler, not a Google Scholar scraper, not a PDF downloader, and not a Zotero replacement.
 
-V0.5 已实现：
+## V0.6 Capabilities
 
-- 定义统一数据模型 `PaperItem`
-- 规范化 DOI、arXiv ID、标题，并生成 `canonical_id`
-- 使用 SQLite 保存论文元数据
-- 使用 `papers`、`paper_sources`、`crawl_runs`、`possible_duplicates` 记录主数据、来源、运行状态和疑似重复
-- 从 OpenAlex 按关键词抓取近期论文元数据
-- 从 arXiv 官方 API 按关键词和分类抓取近期预印本元数据
-- 解析 OpenAlex 的 `abstract_inverted_index`
-- 解析 arXiv Atom XML
-- 使用 Crossref 按 DOI 做 enrichment
-- 使用 Semantic Scholar 按 DOI 或 arXiv ID 做 enrichment
-- 保存原始 API 响应到 `data/raw/`
-- 导出候选集 JSONL 到 `data/exports/`
-- 提供 pytest 覆盖 ID 规范化、模型序列化、OpenAlex abstract 还原、SQLite upsert、crawl runs、enrichment normalize、弱去重
+- Unified `PaperItem` model.
+- DOI, arXiv ID, title, and PMID-aware canonical ID generation.
+- SQLite storage for papers, source references, crawl runs, and possible duplicates.
+- OpenAlex discovery by keyword.
+- arXiv discovery by keyword and category.
+- PubMed discovery through NCBI E-utilities.
+- bioRxiv and medRxiv discovery through the official preprint API.
+- Crossref enrichment by DOI.
+- Semantic Scholar enrichment by DOI or arXiv ID.
+- Raw API response saving under `data/raw/<source>/<YYYY-WW>/`.
+- JSONL candidate export under `data/exports/`.
+- Lightweight weekly candidate-pool Markdown reports under `data/reports/`.
+- Diagnostics for local database and export state.
+- Pytest coverage for normalization, storage, enrichment, deduplication, diagnostics, PubMed, bioRxiv/medRxiv, and report generation.
 
-## Enrichment 的边界
+## What V0.6 Does Not Do
 
-Crossref 和 Semantic Scholar 在当前版本中是 enrichment source，不是发现源。
+- It does not scrape Google Scholar.
+- It does not scrape publisher HTML pages.
+- It does not download PDFs.
+- It does not run LLM summarization or ranking.
+- It does not automatically select the final weekly 13 items.
+- It does not integrate with Zotero, Obsidian, Anki, Telegram, or email.
+- It does not use a vector database.
 
-这意味着：
+The project philosophy is stable, compliant metadata collection first; recommendation and reading workflow later.
 
-- Crossref 只处理数据库里已有 DOI 的条目
-- Crossref 默认不做 keyword discovery
-- Crossref 默认不做 title search
-- Semantic Scholar 只处理已有 DOI 或 arXiv ID 的条目
-- Semantic Scholar 默认不做 title search
-- Semantic Scholar 默认要求 `S2_API_KEY`；如果开启但没有 key，会跳过并记录 warning
-- enrichment 失败只会记录日志和 `crawl_runs`，不会中断整体流程
+## Configure Topics
 
-## 当前不做什么
-
-V0.5 明确不做：
-
-- 不抓 Google Scholar
-- 不做违反网站条款的 HTML scraping
-- 不下载 PDF 全文
-- 不做 LLM 摘要
-- 不做推荐排序
-- 不做 Telegram / Email 推送
-- 不做 Zotero / Obsidian / Anki 集成
-- 暂不实现 PubMed、bioRxiv、OpenReview、CORE、IEEE
-- 暂不启用 GitHub Actions 定时抓取
-
-## 你需要做什么
-
-### 1. 配置兴趣方向
-
-编辑：
+Edit:
 
 ```bash
 config/topics.yaml
 ```
 
-项目用 `lane` 表示兴趣通道。每个 lane 可以配置：
+Each lane can define:
 
-- `keywords`：给 OpenAlex 和 arXiv keyword 查询使用
-- `arxiv_categories`：给 arXiv 分类查询使用
+- `keywords`: used by OpenAlex, arXiv keyword search, PubMed, bioRxiv, and medRxiv.
+- `arxiv_categories`: used only by arXiv.
 
-### 2. 配置抓取限额
+## Configure Sources
 
-编辑：
+Edit:
 
 ```bash
 config/sources.yaml
 ```
 
-当前 OpenAlex / arXiv 默认值故意较小，方便先验证流程：
+Each source has an `enabled` flag plus conservative limits. New discovery sources are disabled by default.
 
-- OpenAlex：每个 lane 只取 1 个关键词，每个 query 取 10 条
-- arXiv：每个 lane 取 1 个关键词和 1 个分类，每个 query 取 10 条
+### Enable PubMed
 
-你可以后续逐步调大：
-
-```yaml
-per_query_limit: 20
-max_total: 100
-max_queries_per_lane: 2
-```
-
-### 3. 开启或关闭 enrichment
-
-Crossref 和 Semantic Scholar 默认可以保持关闭。需要时在 `config/sources.yaml` 中开启：
+PubMed uses NCBI E-utilities, not HTML scraping.
 
 ```yaml
-crossref:
+pubmed:
   enabled: true
-
-semantic_scholar:
-  enabled: true
+  api_key_env: NCBI_API_KEY
+  email_env: CONTACT_EMAIL
+  days_back: 14
+  per_query_limit: 20
+  delay_seconds: 0.4
+  max_total: 50
+  max_queries_per_lane: 1
 ```
 
-关闭时设为：
-
-```yaml
-enabled: false
-```
-
-### 4. 设置环境变量
-
-建议设置 `CONTACT_EMAIL`，用于 OpenAlex 和 Crossref 的 polite pool：
+Recommended environment variables:
 
 ```powershell
 $env:CONTACT_EMAIL="your_email@example.com"
+$env:NCBI_API_KEY="your_ncbi_api_key"
 ```
 
-如果要启用 Semantic Scholar enrichment，建议设置 API key：
+`NCBI_API_KEY` is optional, but setting `CONTACT_EMAIL` is polite and recommended.
 
-```powershell
-$env:S2_API_KEY="your_semantic_scholar_api_key"
+### Enable bioRxiv
+
+bioRxiv uses the official date-range API and filters locally by lane keywords across title, abstract, and category.
+
+```yaml
+biorxiv:
+  enabled: true
+  server: biorxiv
+  days_back: 14
+  per_query_limit: 50
+  delay_seconds: 1
+  max_total: 100
+  max_queries_per_lane: 1
 ```
 
-可选：
+### Enable medRxiv
 
-```powershell
-$env:OPENALEX_API_KEY="your_openalex_api_key"
+medRxiv uses the same official API pattern as bioRxiv.
+
+```yaml
+medrxiv:
+  enabled: true
+  server: medrxiv
+  days_back: 14
+  per_query_limit: 50
+  delay_seconds: 1
+  max_total: 100
+  max_queries_per_lane: 1
 ```
 
-默认配置下，Semantic Scholar 的 `require_api_key: true`。没有 `S2_API_KEY` 时，即使 `semantic_scholar.enabled: true`，程序也会跳过 Semantic Scholar enrichment，避免无 key 模式连续请求导致 429。
+## Enrichment Boundaries
 
-### 5. 本地运行
+Crossref and Semantic Scholar are enrichment sources in this project. They are not discovery sources.
 
-推荐使用 `uv` 管理依赖和运行命令。第一次使用：
+- Crossref enriches stored candidates that already have a DOI.
+- Semantic Scholar enriches stored candidates that already have a DOI or arXiv ID.
+- Crossref does not do keyword discovery by default.
+- Semantic Scholar does not do title search by default.
+- Semantic Scholar defaults to `require_api_key: true`; if enabled without `S2_API_KEY`, it is skipped with a warning.
+
+## Run Locally
+
+For the authoritative validation and run-command reference, see `docs/testing.md`.
+
+Install dependencies:
 
 ```bash
 uv sync --extra dev
 ```
 
-运行抓取：
+Run the metadata pipeline:
 
 ```bash
 uv run python -m src.main
 ```
 
-### 6. 运行测试
-
-```bash
-uv run --extra dev pytest -q
-```
-
-### 7. 检查本地数据状态
-
-运行只读 diagnostics 命令：
+Run diagnostics:
 
 ```bash
 uv run python -m src.diagnostics
 ```
 
-它会输出：
+Generate the weekly candidate-pool report:
 
-- `papers` 数量
-- `paper_sources` 数量
-- `crawl_runs` 按 source/status 分组
-- `possible_duplicates` 数量
-- 最新 JSONL export 文件路径
+```bash
+uv run python -m src.report.weekly_candidates
+```
 
-## 输出文件
+Run tests:
 
-运行后会生成：
+```bash
+uv run --extra dev pytest -q
+```
 
-- `data/raw/<source>/<YYYY-WW>/...`：原始 API 响应文件
-- `data/papers.sqlite`：SQLite 数据库
-- `data/exports/candidates_<YYYY-WW>.jsonl`：统一格式候选集
-- `logs/crawl_<YYYY-WW>.log`：抓取日志
+## Weekly Candidate Report
 
-这些运行产物默认不会提交到 Git，仓库只保留目录占位文件。
+The report command reads `data/exports/candidates_<YYYY-WW>.jsonl` for the current week. If the current week export does not exist, it uses the latest available export.
 
-## 数据库结构
+It writes:
 
-当前表：
+```bash
+data/reports/weekly_candidates_<YYYY-WW>.md
+```
 
-- `papers`：按 `canonical_id` 存储论文主记录
-- `paper_sources`：记录每条论文来自哪个 source、哪个 query、对应 raw 文件路径
-- `crawl_runs`：记录每个 source/query 或 enrichment item 的运行状态
-- `possible_duplicates`：记录疑似重复，不自动合并
+The report is a candidate pool for later screening. It is not a reading list. It groups items by lane when `source_query` is available and includes compact metadata for later LLM screening:
 
-## 后续路线
+- title
+- shortened authors
+- date
+- source
+- venue
+- DOI, arXiv ID, or PMID
+- URL
+- abstract preview
+- fields and keywords
+- source query
 
-建议按这个顺序推进：
+You can adjust the number of items per lane:
 
-1. 让 V0.5 在小限额下稳定运行几轮
-2. 调整 topics 和 source 限额
-3. 增强 Crossref / Semantic Scholar 的字段覆盖和错误处理
-4. 增加 GitHub Actions 每周定时运行
-5. 增加 PubMed / bioRxiv / medRxiv / OpenReview / CORE / IEEE
-6. 再考虑 LLM 摘要、推送、Zotero / Obsidian 集成
+```bash
+uv run python -m src.report.weekly_candidates --per-lane 20
+```
 
-## 当前阶段的判断
+Or with:
 
-这个项目现在适合做一件事：稳定、合规地收集和补全候选论文元数据。
+```powershell
+$env:PAPER_RADAR_REPORT_PER_LANE="20"
+```
 
-它还不是推荐系统，也不是阅读工作流系统。现在最重要的是让数据层可靠，先积累结构干净、来源可追溯、可重复导出的候选集。
+## Output Files
+
+Pipeline runs can generate:
+
+- `data/raw/<source>/<YYYY-WW>/...`: raw API responses.
+- `data/papers.sqlite`: local SQLite database.
+- `data/exports/candidates_<YYYY-WW>.jsonl`: normalized candidate export.
+- `data/reports/weekly_candidates_<YYYY-WW>.md`: lightweight weekly candidate report.
+- `logs/crawl_<YYYY-WW>.log`: crawl logs.
+
+Runtime artifacts are ignored by git except for placeholder files.
+
+## Maintained Docs
+
+- `AGENTS.md`: repository working rules, recovery protocol, and documentation sync rules.
+- `docs/architecture.md`: current architecture and module boundaries.
+- `docs/changes.md`: dated decisions, accepted tradeoffs, and verification notes.
+- `docs/testing.md`: authoritative run and validation commands.
+- `data/AGENTS.md`: rules for runtime data, raw responses, exports, reports, and local databases.
+
+## Data Model Notes
+
+Core tables:
+
+- `papers`: one row per canonical paper.
+- `paper_sources`: source/query/raw-response references for each paper.
+- `crawl_runs`: per source/query or enrichment-item run status.
+- `possible_duplicates`: possible duplicate pairs, never auto-merged.
+
+## Suggested Roadmap
+
+Good V0.7 candidates:
+
+1. Add OpenReview discovery through official APIs.
+2. Improve source-specific field coverage and diagnostics.
+3. Add a dry-run or source preview command.
+4. Add a separate LLM screening prompt that selects exactly 13 weekly radar items from the candidate report.
+
+Keep the boundary clear: collect clean metadata first, then build recommendation and reading workflows on top.

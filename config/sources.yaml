@@ -37,13 +37,29 @@ sources:
     enabled: false
     api_key_env: NCBI_API_KEY
     email_env: CONTACT_EMAIL
-    days_back: 30
-    per_query_limit: 50
+    days_back: 14
+    per_query_limit: 20
+    delay_seconds: 0.4
+    max_total: 50
+    max_queries_per_lane: 1
 
   biorxiv:
     enabled: false
+    server: biorxiv
     days_back: 14
-    per_query_limit: 100
+    per_query_limit: 50
+    delay_seconds: 1
+    max_total: 100
+    max_queries_per_lane: 1
+
+  medrxiv:
+    enabled: false
+    server: medrxiv
+    days_back: 14
+    per_query_limit: 50
+    delay_seconds: 1
+    max_total: 100
+    max_queries_per_lane: 1
 
   openreview:
     enabled: false
