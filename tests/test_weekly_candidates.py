@@ -46,17 +46,62 @@ def test_weekly_candidate_report_from_jsonl_fixture(tmp_path: Path) -> None:
         export_file=export_file,
         output_dir=output_dir,
         per_lane=1,
+        write_reject_log=True,
     )
 
     content = output_path.read_text(encoding="utf-8")
+    reject_log = output_dir / "rejected_candidates_2026-W21.md"
     assert output_path == output_dir / "weekly_candidates_2026-W21.md"
     assert output_dir.exists()
+    assert reject_log.exists()
     assert "# Weekly Candidate Pool: 2026-W21" in content
     assert "This file is a candidate pool for later screening. It is not a reading list." in content
     assert "## neuro_cognitive" in content
     assert "### 1. Strong Candidate" in content
+    assert "- Candidate level:" in content
+    assert "- Radar score:" in content
+    assert "- Score reasons:" in content
+    assert "- Penalties:" in content
     assert "Weak Candidate" not in content
+    assert "- Authors: Ada Lovelace, Norbert Wiener, Grace Hopper, et al." in content
+    reject_content = reject_log.read_text(encoding="utf-8")
+    assert "Missing Fields Candidate" in reject_content
+
+
+def test_weekly_candidate_report_no_scoring_uses_metadata_ranking(tmp_path: Path) -> None:
+    exports_dir = tmp_path / "exports"
+    export_file = exports_dir / "candidates_2026-W21.jsonl"
+    output_dir = tmp_path / "reports"
+    exports_dir.mkdir()
+    rows = [
+        {
+            "canonical_id": "doi:10.1000/strong",
+            "source": "pubmed",
+            "doi": "10.1000/strong",
+            "title": "Strong Candidate",
+            "abstract": "This abstract gives enough metadata for screening.",
+            "authors": ["Ada Lovelace"],
+            "published_date": "2026-05-02",
+            "url": "https://pubmed.ncbi.nlm.nih.gov/123/",
+            "source_query": "neuro_cognitive:keyword:neural coding",
+        },
+        {
+            "canonical_id": "titlehash:missing",
+            "source": "biorxiv",
+            "title": "Missing Fields Candidate",
+        },
+    ]
+    export_file.write_text("\n".join(json.dumps(row) for row in rows), encoding="utf-8")
+
+    output_path = generate_weekly_candidate_report(
+        export_file=export_file,
+        output_dir=output_dir,
+        per_lane=1,
+        enable_scoring=False,
+    )
+
+    content = output_path.read_text(encoding="utf-8")
     assert "## unassigned" in content
     assert "Missing Fields Candidate" in content
-    assert "- Authors: Ada Lovelace, Norbert Wiener, Grace Hopper, et al." in content
+    assert "- Candidate level:" not in content
     assert "- Abstract preview: missing" in content

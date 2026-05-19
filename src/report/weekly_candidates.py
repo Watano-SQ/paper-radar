@@ -9,12 +9,17 @@ from typing import Any
 
 from src.app.config import RuntimeConfig, load_runtime_config
 from src.app.runtime import format_runtime_filename
+from src.ranking.balance import BalancedSelection, select_balanced_candidates
+from src.ranking.config import scoring_section
+from src.ranking.rejects import write_reject_log as write_reject_log_file
+from src.ranking.scoring import ScoredCandidate, score_candidates
 from src.utils.dates import iso_week_label, to_iso_date
 
 
 DEFAULT_PER_LANE = 20
 DEFAULT_EXPORT_FILENAME_TEMPLATE = "candidates_{week}.jsonl"
 DEFAULT_WEEKLY_REPORT_FILENAME_TEMPLATE = "weekly_candidates_{week}.md"
+DEFAULT_REJECT_LOG_FILENAME_TEMPLATE = "rejected_candidates_{week}.md"
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -22,6 +27,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--config-dir", type=Path, default=None)
     parser.add_argument("--export-file", type=Path, default=None)
     parser.add_argument("--output-dir", type=Path, default=None)
+    parser.add_argument("--write-reject-log", action="store_true")
+    parser.add_argument("--no-scoring", action="store_true")
     parser.add_argument(
         "--per-lane",
         type=int,
@@ -34,6 +41,8 @@ def main(argv: list[str] | None = None) -> None:
         output_dir=args.output_dir,
         per_lane=args.per_lane,
         runtime=runtime,
+        write_reject_log=args.write_reject_log,
+        enable_scoring=not args.no_scoring,
     )
     print(path)
 
@@ -48,12 +57,16 @@ def generate_weekly_candidate_report(
     runtime: RuntimeConfig | None = None,
     export_filename_template: str | None = None,
     weekly_report_filename_template: str | None = None,
+    reject_log_filename_template: str | None = None,
+    write_reject_log: bool = False,
+    enable_scoring: bool | None = None,
 ) -> Path:
     if runtime is None and (
         exports_dir is None
         or output_dir is None
         or export_filename_template is None
         or weekly_report_filename_template is None
+        or reject_log_filename_template is None
     ):
         runtime = load_runtime_config()
     if runtime is not None:
@@ -68,10 +81,15 @@ def generate_weekly_candidate_report(
             "weekly_report_filename_template",
             DEFAULT_WEEKLY_REPORT_FILENAME_TEMPLATE,
         )
+        reject_log_filename_template = reject_log_filename_template or files_config.get(
+            "reject_log_filename_template",
+            DEFAULT_REJECT_LOG_FILENAME_TEMPLATE,
+        )
     exports_dir = exports_dir or Path("data") / "exports"
     output_dir = output_dir or Path("data") / "reports"
     export_filename_template = export_filename_template or DEFAULT_EXPORT_FILENAME_TEMPLATE
     weekly_report_filename_template = weekly_report_filename_template or DEFAULT_WEEKLY_REPORT_FILENAME_TEMPLATE
+    reject_log_filename_template = reject_log_filename_template or DEFAULT_REJECT_LOG_FILENAME_TEMPLATE
 
     selected_export = export_file or select_export_file(
         exports_dir,
@@ -82,11 +100,38 @@ def generate_weekly_candidate_report(
         raise FileNotFoundError(f"No candidate export found in {exports_dir}")
     report_week = week_label or _week_from_export(selected_export, export_filename_template) or iso_week_label()
     candidates = load_candidates(selected_export)
-    deduped = dedupe_candidates(candidates)
-    groups = group_candidates(deduped)
+    scoring_enabled = _scoring_enabled(runtime, enable_scoring)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / format_runtime_filename(weekly_report_filename_template, week_label=report_week)
+    if scoring_enabled:
+        if runtime is None:
+            runtime = load_runtime_config()
+        scored = score_candidates(candidates, runtime.scoring, runtime.topics)
+        selection = select_balanced_candidates(scored, runtime.scoring, max_per_lane=per_lane)
+        output_path.write_text(
+            render_scored_report(
+                selection=selection,
+                export_file=selected_export,
+                week_label=report_week,
+                scoring_config=runtime.scoring,
+            ),
+            encoding="utf-8",
+        )
+        if write_reject_log:
+            reject_output_path = output_dir / format_runtime_filename(reject_log_filename_template, week_label=report_week)
+            write_reject_log_file(
+                reject_output_path,
+                selection,
+                week_label=report_week,
+                max_per_reason=int(
+                    scoring_section(runtime.scoring).get("reject", {}).get("reject_log_max_per_reason", 30)
+                ),
+            )
+        return output_path
+
+    deduped = dedupe_candidates(candidates)
+    groups = group_candidates(deduped)
     output_path.write_text(
         render_report(
             groups=groups,
@@ -98,6 +143,49 @@ def generate_weekly_candidate_report(
         encoding="utf-8",
     )
     return output_path
+
+
+def render_scored_report(
+    *,
+    selection: BalancedSelection,
+    export_file: Path,
+    week_label: str,
+    scoring_config: dict[str, Any],
+) -> str:
+    selected = [item for items in selection.selected_by_lane.values() for item in items]
+    sources = Counter(str(item.candidate.get("source") or "unknown") for item in selected)
+    source_queries = Counter(str(item.candidate.get("source_query") or "unknown") for item in selected)
+    report_config = scoring_section(scoring_config).get("report", {})
+    lines = [
+        f"# Weekly Candidate Pool: {week_label}",
+        "",
+        "This file is a candidate pool for later screening. It is not a reading list.",
+        "",
+        "## Summary",
+        "",
+        f"- Total input candidates: {selection.total_input}",
+        f"- Selected candidates: {selection.selected_count}",
+        f"- Sources: {_format_counter(sources)}",
+        f"- Lanes / source queries: {len(selection.selected_by_lane)} lanes, {len(source_queries)} source queries",
+        f"- Export file: {export_file}",
+    ]
+    if report_config.get("include_reject_summary", True):
+        lines.extend(
+            [
+                f"- Rejected candidates: {len(selection.rejected)}",
+                f"- Downranked candidates: {len(selection.downranked)}",
+            ]
+        )
+    lines.append("")
+
+    for lane in sorted(selection.selected_by_lane):
+        lines.extend([f"## {lane}", ""])
+        for index, scored in enumerate(selection.selected_by_lane[lane], start=1):
+            lines.extend(_render_scored_candidate(index, scored, include_details=report_config.get("include_score_details", True)))
+        if not selection.selected_by_lane[lane]:
+            lines.append("_No candidates._")
+            lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def select_export_file(
@@ -223,6 +311,39 @@ def _render_candidate(index: int, item: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _render_scored_candidate(index: int, scored: ScoredCandidate, *, include_details: bool) -> list[str]:
+    item = scored.candidate
+    title = _clean_inline(item.get("title")) or "Untitled"
+    lines = [
+        f"### {index}. {title}",
+        "",
+        f"- Candidate level: {scored.score.level}",
+        f"- Radar score: {scored.score.total:g}",
+    ]
+    if include_details:
+        lines.extend(
+            [
+                f"- Score reasons: {_join_values(scored.score.reasons) or 'none'}",
+                f"- Penalties: {_join_values(scored.score.penalties) or 'none'}",
+            ]
+        )
+    lines.extend(
+        [
+            f"- Source: {_clean_inline(item.get('source')) or 'unknown'}",
+            f"- Date: {_clean_inline(item.get('published_date')) or _clean_inline(item.get('year')) or 'unknown'}",
+            f"- Authors: {_short_authors(item.get('authors'))}",
+            f"- Venue: {_clean_inline(item.get('venue')) or 'unknown'}",
+            f"- IDs: {_ids(item)}",
+            f"- URL: {_clean_inline(item.get('url') or item.get('oa_url')) or 'missing'}",
+            f"- Source query: {_clean_inline(item.get('source_query')) or 'unknown'}",
+            f"- Fields / keywords: {_join_values([*_as_list(item.get('fields')), *_as_list(item.get('keywords'))]) or 'missing'}",
+            f"- Abstract preview: {_preview(item.get('abstract'))}",
+            "",
+        ]
+    )
+    return lines
+
+
 def _lane_from_source_query(value: Any) -> str:
     if not value:
         return "unassigned"
@@ -285,6 +406,14 @@ def _clean_inline(value: Any) -> str | None:
         return None
     text = " ".join(str(value).split())
     return text or None
+
+
+def _scoring_enabled(runtime: RuntimeConfig | None, explicit: bool | None) -> bool:
+    if explicit is not None:
+        return explicit
+    if runtime is None:
+        return True
+    return bool(scoring_section(runtime.scoring).get("enabled", True))
 
 
 def _template_glob(template: str) -> str:

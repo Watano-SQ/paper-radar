@@ -13,7 +13,8 @@ Paper Radar 是一个合规的跨学科学术材料元数据抓取项目。仓�
 5. 元数据默认写入 `data/papers.sqlite`，原始响应默认写入 `data/raw/`，抓取状态写入 `crawl_runs`；这些路径由 runtime config 解析。
 6. 可选 enrichment 源在已有条目基础上补全元数据。
 7. 运行弱去重后默认导出 `data/exports/candidates_<YYYY-WW>.jsonl`。
-8. 可通过 diagnostics 和 weekly report 工具检查本地状态或生成候选池报告。
+8. weekly report 从 JSONL 候选池读取数据，按 `config/scoring.yaml` 做透明规则评分和 lane balance，生成候选池报告；可选生成 reject/downrank log。
+9. 可通过 diagnostics 工具检查本地状态。
 
 当前已经实现：
 
@@ -23,12 +24,13 @@ Paper Radar 是一个合规的跨学科学术材料元数据抓取项目。仓�
 - Crossref、Semantic Scholar enrichment 客户端；
 - SQLite 存储层，包含 `papers`、`paper_sources`、`crawl_runs`、`possible_duplicates`；
 - 中央 runtime 配置层，包含 `AppPaths`、`RuntimeConfig` 和 `config/app.yaml`；
+- 透明规则评分、lane balance、reject/downrank log；
 - 原始响应保存、JSONL 导出、弱去重、诊断命令、周候选池 Markdown 报告；
 - pytest 测试入口。
 
 当前不能声称已经实现：
 
-- 不是推荐系统；
+- 不是机器学习推荐系统或最终阅读清单生成器；
 - 不是完整阅读工作流系统；
 - 不下载 PDF 全文；
 - 不做 LLM 摘要；
@@ -74,11 +76,11 @@ Paper Radar 是一个合规的跨学科学术材料元数据抓取项目。仓�
 
 当前活跃设计说明：
 
-- `docs/specs/v0.6.5-runtime-config.md`
+- `docs/specs/v0.7-scoring-balance-rejects.md`
 
 当前活跃执行计划：
 
-- `docs/plans/v0.6.5-runtime-config.md`
+- `docs/plans/v0.7-scoring-balance-rejects.md`
 
 关键源码入口：
 
@@ -91,10 +93,12 @@ Paper Radar 是一个合规的跨学科学术材料元数据抓取项目。仓�
 - `src/pipeline/dedup.py`
 - `src/diagnostics.py`
 - `src/report/weekly_candidates.py`
+- `src/ranking/`
 - `src/sources/`
 - `config/sources.yaml`
 - `config/topics.yaml`
 - `config/app.yaml`
+- `config/scoring.yaml`
 - `tests/`
 
 参考文件列表必须随着活跃设计说明和执行计划组合变化而更新。

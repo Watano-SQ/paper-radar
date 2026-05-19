@@ -9,6 +9,7 @@
 - 不要在多个文档中重复维护命令；其他文档只链接或简短引用本文件。
 - 涉及外部 API 的命令可能产生网络请求、写入 `data/` 和 `logs/`，运行前检查 `config/sources.yaml`。
 - V0.6.5 起，默认运行路径由 `config/app.yaml` 和 runtime 环境变量解析；默认本地路径保持不变。
+- V0.7 起，周候选池报告默认使用 `config/scoring.yaml` 做透明规则评分和 lane balance。
 
 ## 环境准备
 
@@ -36,6 +37,12 @@ uv run --extra dev pytest -q tests/test_store.py
 
 ```bash
 uv run --extra dev pytest -q tests/test_runtime_config.py tests/test_weekly_candidates.py tests/test_diagnostics.py
+```
+
+运行 scoring / report 相关测试：
+
+```bash
+uv run --extra dev pytest -q tests/test_scoring.py tests/test_weekly_candidates.py
 ```
 
 ## 本地抓取
@@ -82,11 +89,24 @@ uv run python -m src.report.weekly_candidates
 ```
 
 默认读取 `data/exports/` 中当前周或最新的 `candidates_*.jsonl`，并输出到 `data/reports/`。
+V0.7 起，默认会对候选项执行规则评分、lane balance，并在报告中写入 candidate level、radar score、score reasons 和 penalties。
 
 可显式指定配置目录：
 
 ```bash
 uv run python -m src.report.weekly_candidates --config-dir config
+```
+
+生成 reject/downrank 调试日志：
+
+```bash
+uv run python -m src.report.weekly_candidates --write-reject-log
+```
+
+使用旧的元数据完整度排序近似路径：
+
+```bash
+uv run python -m src.report.weekly_candidates --no-scoring
 ```
 
 也可继续显式指定输入输出：
@@ -109,6 +129,21 @@ uv run python -m src.report.weekly_candidates --export-file data/exports/candida
 - `PAPER_RADAR_DATABASE_PATH`
 
 `config/app.yaml` 中的 `obsidian` 段目前只是未来兼容脚手架；当前命令不会写入 Obsidian vault。
+
+## Scoring 配置
+
+默认 scoring 配置维护在 `config/scoring.yaml`。如果该文件缺失，代码会使用保守默认配置，不会导致命令崩溃。
+
+可配置内容包括：
+
+- metadata、freshness、source quality、content signal 权重；
+- `S_candidate`、`A_candidate`、`B_candidate`、`C_candidate` 阈值；
+- lane balance 的每 lane 最大数量、活跃 lane 最小数量和全局最大数量；
+- hard reject 行为；
+- reject log 每个 reason 的最大条目数；
+- review/survey 和 benchmark-only signal 词表。
+
+候选级别只用于候选池报告，不代表最终阅读等级。
 
 ## 跳过验证的可接受原因
 

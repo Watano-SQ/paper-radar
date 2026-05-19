@@ -22,6 +22,7 @@ def test_default_app_config_resolves_local_paths() -> None:
     assert runtime.paths.project_root == project_root
     assert runtime.paths.config_dir == project_root / "config"
     assert runtime.paths.app_config_path == project_root / "config" / "app.yaml"
+    assert runtime.paths.scoring_config_path == project_root / "config" / "scoring.yaml"
     assert runtime.paths.sources_config_path == project_root / "config" / "sources.yaml"
     assert runtime.paths.topics_config_path == project_root / "config" / "topics.yaml"
     assert runtime.paths.data_dir == project_root / "data"
@@ -30,6 +31,7 @@ def test_default_app_config_resolves_local_paths() -> None:
     assert runtime.paths.reports_dir == project_root / "data" / "reports"
     assert runtime.paths.logs_dir == project_root / "logs"
     assert runtime.paths.database_path == project_root / "data" / "papers.sqlite"
+    assert runtime.scoring["scoring"]["enabled"] is True
 
 
 def test_relative_app_paths_resolve_under_project_root(tmp_path: Path) -> None:
@@ -138,6 +140,7 @@ def test_weekly_report_uses_configured_reports_directory(tmp_path: Path) -> None
           reports_dir: runtime-reports
         files:
           weekly_report_filename_template: "radar_{week}.md"
+          reject_log_filename_template: "rejects_{week}.md"
         """,
     )
     runtime = load_runtime_config(project_root=tmp_path, config_dir=config_dir, environ={})
@@ -148,10 +151,11 @@ def test_weekly_report_uses_configured_reports_directory(tmp_path: Path) -> None
         encoding="utf-8",
     )
 
-    output_path = generate_weekly_candidate_report(runtime=runtime, week_label="2026-W21")
+    output_path = generate_weekly_candidate_report(runtime=runtime, week_label="2026-W21", write_reject_log=True)
 
     assert output_path == runtime.paths.reports_dir / "radar_2026-W21.md"
     assert output_path.exists()
+    assert (runtime.paths.reports_dir / "rejects_2026-W21.md").exists()
 
 
 def test_diagnostics_reads_configured_runtime_paths(tmp_path: Path) -> None:

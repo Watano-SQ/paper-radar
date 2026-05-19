@@ -8,6 +8,8 @@ from typing import Any, Mapping
 
 import yaml
 
+from src.ranking.config import merge_scoring_config
+
 
 DEFAULT_APP_CONFIG: dict[str, Any] = {
     "app": {
@@ -21,6 +23,7 @@ DEFAULT_APP_CONFIG: dict[str, Any] = {
     "files": {
         "export_filename_template": "candidates_{week}.jsonl",
         "weekly_report_filename_template": "weekly_candidates_{week}.md",
+        "reject_log_filename_template": "rejected_candidates_{week}.md",
     },
     "obsidian": {
         "enabled": False,
@@ -46,6 +49,7 @@ class AppPaths:
     sources_config_path: Path
     topics_config_path: Path
     app_config_path: Path
+    scoring_config_path: Path
     data_dir: Path
     raw_dir: Path
     exports_dir: Path
@@ -60,6 +64,7 @@ class RuntimeConfig:
     app: dict[str, Any]
     sources: dict[str, Any]
     topics: dict[str, Any]
+    scoring: dict[str, Any]
 
 
 def load_runtime_config(
@@ -77,10 +82,12 @@ def load_runtime_config(
     app_config_path = resolved_config_dir / "app.yaml"
     sources_config_path = resolved_config_dir / "sources.yaml"
     topics_config_path = resolved_config_dir / "topics.yaml"
+    scoring_config_path = resolved_config_dir / "scoring.yaml"
 
     app_config = _deep_merge(DEFAULT_APP_CONFIG, _load_yaml(app_config_path))
     sources_config = _load_yaml(sources_config_path)
     topics_config = _load_yaml(topics_config_path)
+    scoring_config = merge_scoring_config(_load_yaml(scoring_config_path))
 
     paths = _build_paths(
         project_root=resolved_project_root,
@@ -88,6 +95,7 @@ def load_runtime_config(
         app_config_path=app_config_path,
         sources_config_path=sources_config_path,
         topics_config_path=topics_config_path,
+        scoring_config_path=scoring_config_path,
         app_config=app_config,
         env=env,
     )
@@ -96,6 +104,7 @@ def load_runtime_config(
         app=app_config,
         sources=sources_config.get("sources", {}),
         topics=topics_config.get("lanes", {}),
+        scoring=scoring_config,
     )
 
 
@@ -126,6 +135,7 @@ def _build_paths(
     app_config_path: Path,
     sources_config_path: Path,
     topics_config_path: Path,
+    scoring_config_path: Path,
     app_config: dict[str, Any],
     env: Mapping[str, str],
 ) -> AppPaths:
@@ -169,6 +179,7 @@ def _build_paths(
         sources_config_path=sources_config_path,
         topics_config_path=topics_config_path,
         app_config_path=app_config_path,
+        scoring_config_path=scoring_config_path,
         data_dir=data_dir,
         raw_dir=raw_dir,
         exports_dir=exports_dir,

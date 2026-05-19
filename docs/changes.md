@@ -6,6 +6,61 @@
 
 ### 决策
 
+落地 V0.7 的透明规则评分、lane balance 和 reject/downrank log。
+
+- 为什么：
+  - V0.6/V0.6.5 已能生成候选池和周候选池报告，但报告排序主要依赖元数据完整度，缺少可解释的 lane relevance、freshness、review/survey signal 和噪声惩罚。
+  - 当前需要更好的候选池筛选输入，而不是直接建立机器学习推荐系统或 LLM ranking。
+  - 后续真实周运行需要能调试为什么候选被选中、降级或拒绝。
+
+- 决定：
+  - 新增 `config/scoring.yaml` 作为规则评分、候选级别阈值、lane balance、reject 行为和报告细节设置入口。
+  - `RuntimeConfig` 新增 `scoring`，`AppPaths` 新增 `scoring_config_path`；缺失 `config/scoring.yaml` 时使用代码内保守默认值。
+  - 新增 `src/ranking/scoring.py`，输出 `ScoreBreakdown` 和 `ScoredCandidate`。
+  - 新增 `src/ranking/balance.py`，处理 duplicate canonical ID、低分 reject、lane balance 和 downrank。
+  - 新增 `src/ranking/rejects.py`，生成 reject/downrank Markdown log。
+  - `src.report.weekly_candidates` 默认启用评分，报告中显示 candidate level、radar score、score reasons 和 penalties。
+  - 保留 `--no-scoring` 作为旧 metadata ranking 近似路径，新增 `--write-reject-log`。
+  - `config/app.yaml` 新增 `reject_log_filename_template`，默认输出 `data/reports/rejected_candidates_<YYYY-WW>.md`。
+  - V0.7 candidate level 只是候选池报告级别，不是最终阅读等级。
+
+- 已实现：
+  - `config/scoring.yaml`
+  - `src/ranking/__init__.py`
+  - `src/ranking/config.py`
+  - `src/ranking/scoring.py`
+  - `src/ranking/balance.py`
+  - `src/ranking/rejects.py`
+  - `tests/test_scoring.py`
+  - weekly report 默认评分、lane balance、可选 reject log 和 `--no-scoring`。
+  - `docs/specs/v0.7-scoring-balance-rejects.md`
+  - `docs/plans/v0.7-scoring-balance-rejects.md`
+  - `docs/archive/INDEX.md`
+  - V0.6.5 活跃 spec/plan 已归档到 `docs/archive/specs/` 和 `docs/archive/plans/`。
+
+- 已拒绝的替代方案：
+  - 拒绝 LLM 摘要、LLM ranking、OpenAI / Claude API 调用。
+  - 拒绝 PDF 下载、Zotero、Obsidian 插件、Anki、Telegram / Email、vector database。
+  - 拒绝新增 OpenReview / CORE / IEEE 客户端。
+  - 拒绝修改 SQLite schema 或 JSONL export 格式。
+  - 拒绝把 scoring 逻辑塞进 source clients 或抓取流程。
+
+- 接受的风险或债务：
+  - 默认权重只是初始可解释规则，不是普适真理；需要真实周运行后校准。
+  - cross-domain signal 只做简单关键词 overlap，不做语义匹配。
+  - reject/downrank log 默认只在请求 `--write-reject-log` 时生成。
+  - pytest 在当前 Windows/OneDrive 沙箱中仍会报告 `.pytest_cache` 写入权限警告；测试本身通过。
+
+- 取代关系：
+  - `docs/specs/v0.7-scoring-balance-rejects.md` 取代 `docs/archive/specs/v0.6.5-runtime-config.md` 作为当前活跃设计说明。
+  - `docs/plans/v0.7-scoring-balance-rejects.md` 取代 `docs/archive/plans/v0.6.5-runtime-config.md` 作为当前活跃执行计划。
+
+- 验证：
+  - `uv --cache-dir .uv-cache run --extra dev pytest -q tests/test_scoring.py tests/test_weekly_candidates.py tests/test_runtime_config.py` 通过，结果为 16 passed。
+  - `uv --cache-dir .uv-cache run --extra dev pytest -q` 通过，结果为 39 passed。
+
+### 决策
+
 落地 V0.6.5 runtime 路径配置层，保留默认本地 CLI 行为。
 
 - 为什么：

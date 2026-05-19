@@ -13,21 +13,24 @@ Paper Radar 用于合规地收集跨学科学术材料元数据，把不同官�
 1. `config/topics.yaml` 定义兴趣 lane、关键词和 arXiv 分类。
 2. `config/sources.yaml` 定义来源启用状态、请求限额、延迟、API key 环境变量名和 enrichment 开关。
 3. `config/app.yaml` 定义默认本地运行路径、导出文件名模板和报告文件名模板。
-4. `src.app.config` 加载 runtime config，解析 `AppPaths`；相对路径默认按项目根目录解析，绝对路径保持不变。
-5. `src/main.py` 创建 `PaperStore`，按来源构造查询。
-6. 已启用的来源客户端抓取原始数据，并默认保存原始响应到 `data/raw/<source>/<YYYY-WW>/`；raw 目录可通过 runtime config 改变。
-7. 来源客户端将原始记录规范化为 `PaperItem`。
-8. `PaperStore` 将条目 upsert 到 SQLite，并记录来源、查询、抓取状态。
-9. Crossref 和 Semantic Scholar 可作为 enrichment 源处理已有条目，不作为默认发现源。
-10. `src.pipeline.dedup` 对当前收集条目和历史库做弱去重，疑似重复写入 `possible_duplicates`。
-11. `src.pipeline.export` 默认导出 `data/exports/candidates_<YYYY-WW>.jsonl`，目录和文件名模板可通过 runtime config 改变。
-12. `src.diagnostics` 可读取 SQLite 和 exports 状态；`src.report.weekly_candidates` 可从 JSONL 导出生成周候选池 Markdown 报告，默认输出目录和文件名模板来自 runtime config。
+4. `config/scoring.yaml` 定义周候选池报告的规则评分、阈值、lane balance 和 reject log 行为。
+5. `src.app.config` 加载 runtime config，解析 `AppPaths`；相对路径默认按项目根目录解析，绝对路径保持不变。
+6. `src/main.py` 创建 `PaperStore`，按来源构造查询。
+7. 已启用的来源客户端抓取原始数据，并默认保存原始响应到 `data/raw/<source>/<YYYY-WW>/`；raw 目录可通过 runtime config 改变。
+8. 来源客户端将原始记录规范化为 `PaperItem`。
+9. `PaperStore` 将条目 upsert 到 SQLite，并记录来源、查询、抓取状态。
+10. Crossref 和 Semantic Scholar 可作为 enrichment 源处理已有条目，不作为默认发现源。
+11. `src.pipeline.dedup` 对当前收集条目和历史库做弱去重，疑似重复写入 `possible_duplicates`。
+12. `src.pipeline.export` 默认导出 `data/exports/candidates_<YYYY-WW>.jsonl`，目录和文件名模板可通过 runtime config 改变。
+13. `src.report.weekly_candidates` 从 JSONL 导出生成周候选池 Markdown 报告，默认使用 V0.7 规则评分、lane balance 和可选 reject/downrank log。
+14. `src.diagnostics` 可读取 SQLite 和 exports 状态。
 
 ## 主要模块与职责
 
 - `config/`：维护兴趣方向、来源开关、请求限额、外部服务环境变量名和本地 runtime 路径。
 - `config/app.yaml`：维护默认本地输出路径、数据库路径、文件名模板和未来 Obsidian 配置脚手架；当前不实现 Obsidian 写入。
-- `src/app/config.py`：加载 `config/app.yaml`、`config/sources.yaml`、`config/topics.yaml`，解析 `AppPaths` 和 `RuntimeConfig`。
+- `config/scoring.yaml`：维护周候选池报告的规则评分权重、候选级别阈值、lane balance、reject 行为和报告细节设置。
+- `src/app/config.py`：加载 `config/app.yaml`、`config/sources.yaml`、`config/topics.yaml`、`config/scoring.yaml`，解析 `AppPaths` 和 `RuntimeConfig`。
 - `src/app/runtime.py`：根据 runtime 文件名模板构造候选导出路径和周报路径。
 - `src/main.py`：主编排入口，负责运行来源、运行 enrichment、去重和导出；`run_pipeline(runtime)` 可由 CLI 以外的代码调用。
 - `src/models/paper.py`：统一论文元数据模型 `PaperItem`。
@@ -41,12 +44,15 @@ Paper Radar 用于合规地收集跨学科学术材料元数据，把不同官�
 - `src/utils/`：日期、HTTP、ID 和文本工具。
 - `src/diagnostics.py`：本地数据状态诊断。
 - `src/report/weekly_candidates.py`：从候选 JSONL 生成周候选池 Markdown 报告。
+- `src/ranking/scoring.py`：规则评分和候选级别计算。
+- `src/ranking/balance.py`：duplicate 处理、lane balance、selected/rejected/downranked 决策。
+- `src/ranking/rejects.py`：reject/downrank Markdown log 渲染。
 - `tests/`：pytest 测试。
 
 ## 数据流
 
 ```text
-config/app.yaml + config/topics.yaml + config/sources.yaml
+config/app.yaml + config/topics.yaml + config/sources.yaml + config/scoring.yaml
   -> src.app.config builds RuntimeConfig and AppPaths
   -> src.main builds SourceQuery values
   -> source clients fetch official/public APIs
@@ -56,7 +62,9 @@ config/app.yaml + config/topics.yaml + config/sources.yaml
   -> enrichment clients optionally update existing items
   -> weak dedup records possible_duplicates
   -> export_jsonl writes runtime-configured JSONL candidate export
-  -> diagnostics/report tools read local outputs
+  -> report scores and balances exported candidates at report time
+  -> optional reject/downrank log is written under runtime reports dir
+  -> diagnostics reads local outputs
 ```
 
 ## 存储结构
@@ -74,6 +82,7 @@ config/app.yaml + config/topics.yaml + config/sources.yaml
 - `data/raw/`：默认原始 API 响应目录，默认不提交具体抓取文件；可通过 runtime config 改变。
 - `data/exports/*.jsonl`：默认候选集导出目录，默认不提交 JSONL；可通过 runtime config 改变。
 - `data/reports/*.md`：默认周候选池报告输出目录，由报告命令生成，默认不提交；仓库只保留 `data/reports/.gitkeep`；可通过 runtime config 改变。
+- `data/reports/rejected_candidates_*.md`：可选 reject/downrank 调试日志，默认不提交；可通过 runtime config 文件名模板改变。
 - `logs/*.log`：默认运行日志目录，默认不提交；可通过 runtime config 改变。
 
 ## Runtime 配置
@@ -91,12 +100,29 @@ V0.6.5 引入 `RuntimeConfig` 和 `AppPaths`，把路径解析集中在 `src.app
 
 `config/app.yaml` 中的 `obsidian` 段只是未来兼容脚手架。当前不会写入 Obsidian vault，也没有 Obsidian 插件实现。
 
+## 规则评分与候选级别
+
+V0.7 引入轻量、透明、可配置的 report-stage 规则评分层。评分只读取 JSONL 候选项中已有字段，不访问外部 API，不改变 SQLite schema，也不改变 JSONL export 格式。
+
+评分结果包含：
+
+- `S_candidate`
+- `A_candidate`
+- `B_candidate`
+- `C_candidate`
+- `reject`
+
+这些只是周候选池报告中的候选级别，不是最终阅读等级。最终阅读清单或 13 项 weekly radar 仍需要后续人工或 LLM 筛选流程。
+
+lane balance 会按配置限制每个 lane 的最大入选数量，并尝试为活跃 lane 保留最低候选数量。被硬拒绝、低于阈值、重复 canonical ID 或因 balance 未入选的候选可写入 reject/downrank log。
+
 ## 重要边界
 
 - OpenAlex、arXiv、PubMed、bioRxiv、medRxiv 是发现源客户端，但是否运行由 `config/sources.yaml` 控制。
 - Crossref、Semantic Scholar 当前是 enrichment 源，不是默认发现源。
 - `possible_duplicates` 只记录疑似重复，不自动合并记录。
 - source 客户端不负责发现项目根目录；需要写入 raw response 时只使用调用方传入的 `raw_dir`。
+- V0.7 scoring 是规则评分，不是 LLM 排名或机器学习推荐系统。
 - 原始响应、数据库、导出和日志是运行产物，不是长期项目事实源。
 - 当前文档事实源在保留文档中；`docs/archive/` 只提供历史上下文。
 
@@ -113,7 +139,7 @@ V0.6.5 引入 `RuntimeConfig` 和 `AppPaths`，把路径解析集中在 `src.app
 - 不做违反网站条款的 HTML scraping。
 - 不下载 PDF 全文。
 - 不做 LLM 摘要。
-- 不做推荐排序。
+- 不做 LLM 推荐排序。
 - 不做 Telegram / Email 推送。
 - 不做 Zotero / Obsidian / Anki 集成。
 - 不把一次性执行计划写入 README、架构文档或根规则。

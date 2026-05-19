@@ -2,11 +2,11 @@
 
 Paper Radar is a compliant cross-disciplinary academic metadata radar for personal use.
 
-The current version is V0.6.5. It collects recent academic metadata from official APIs and public APIs, normalizes records into one `PaperItem` model, stores them in SQLite, exports a JSONL candidate pool, and can generate a lightweight weekly Markdown candidate report. V0.6.5 adds centralized runtime path configuration while keeping the default local behavior unchanged.
+The current version is V0.7. It collects recent academic metadata from official APIs and public APIs, normalizes records into one `PaperItem` model, stores them in SQLite, exports a JSONL candidate pool, and can generate a lightweight weekly Markdown candidate report with transparent rule-based candidate scoring, lane balance, and an optional reject/downrank log.
 
 It is not a general-purpose crawler, not a Google Scholar scraper, not a PDF downloader, and not a Zotero replacement.
 
-## V0.6.5 Capabilities
+## V0.7 Capabilities
 
 - Unified `PaperItem` model.
 - DOI, arXiv ID, title, and PMID-aware canonical ID generation.
@@ -22,14 +22,18 @@ It is not a general-purpose crawler, not a Google Scholar scraper, not a PDF dow
 - Lightweight weekly candidate-pool Markdown reports under `data/reports/`.
 - Diagnostics for local database and export state.
 - Central runtime path configuration through `config/app.yaml` and `src.app`.
+- Rule-based candidate scoring through `config/scoring.yaml` and `src.ranking`.
+- Configurable lane balance for weekly candidate reports.
+- Optional reject/downrank log for debugging report filtering decisions.
 - Pytest coverage for normalization, storage, enrichment, deduplication, diagnostics, PubMed, bioRxiv/medRxiv, and report generation.
 
-## What V0.6.5 Does Not Do
+## What V0.7 Does Not Do
 
 - It does not scrape Google Scholar.
 - It does not scrape publisher HTML pages.
 - It does not download PDFs.
 - It does not run LLM summarization or ranking.
+- It does not treat candidate levels as final reading grades.
 - It does not automatically select the final weekly 13 items.
 - It does not integrate with Zotero, Obsidian, Anki, Telegram, or email.
 - It does not use a vector database.
@@ -151,6 +155,18 @@ Supported environment overrides:
 - `PAPER_RADAR_LOGS_DIR`
 - `PAPER_RADAR_DATABASE_PATH`
 
+## Configure Scoring
+
+Edit:
+
+```bash
+config/scoring.yaml
+```
+
+V0.7 scoring is rule-based and explainable. It uses metadata completeness, freshness, source quality, lane keyword matches, simple cross-domain keyword overlap, review/survey signals, and simple noise penalties. Weights, thresholds, lane balance, reject behavior, and report detail settings are configurable.
+
+Candidate levels such as `S_candidate`, `A_candidate`, `B_candidate`, and `C_candidate` are report-stage candidate levels only. They are not final weekly reading grades.
+
 ## Run Locally
 
 For the authoritative validation and run-command reference, see `docs/testing.md`.
@@ -193,6 +209,18 @@ uv run python -m src.report.weekly_candidates
 uv run python -m src.report.weekly_candidates --config-dir config
 ```
 
+Generate a reject/downrank log alongside the report:
+
+```bash
+uv run python -m src.report.weekly_candidates --write-reject-log
+```
+
+Use the compatibility metadata ranking path:
+
+```bash
+uv run python -m src.report.weekly_candidates --no-scoring
+```
+
 Run tests:
 
 ```bash
@@ -209,8 +237,12 @@ It writes:
 data/reports/weekly_candidates_<YYYY-WW>.md
 ```
 
-The report is a candidate pool for later screening. It is not a reading list. It groups items by lane when `source_query` is available and includes compact metadata for later LLM screening:
+The report is a candidate pool for later screening. It is not a reading list. It groups items by lane when `source_query` is available and includes compact metadata plus score details for later screening:
 
+- candidate level
+- radar score
+- score reasons
+- penalties
 - title
 - shortened authors
 - date
@@ -234,6 +266,12 @@ Or with:
 $env:PAPER_RADAR_REPORT_PER_LANE="20"
 ```
 
+When requested with `--write-reject-log`, V0.7 also writes:
+
+```bash
+data/reports/rejected_candidates_<YYYY-WW>.md
+```
+
 ## Output Files
 
 Pipeline runs can generate:
@@ -242,6 +280,7 @@ Pipeline runs can generate:
 - `data/papers.sqlite`: local SQLite database.
 - `data/exports/candidates_<YYYY-WW>.jsonl`: normalized candidate export.
 - `data/reports/weekly_candidates_<YYYY-WW>.md`: lightweight weekly candidate report.
+- `data/reports/rejected_candidates_<YYYY-WW>.md`: optional reject/downrank debug log.
 - `logs/crawl_<YYYY-WW>.log`: crawl logs.
 
 These are the default local paths. V0.6.5 allows them to be redirected through `config/app.yaml` or the supported runtime environment variables.
@@ -267,11 +306,11 @@ Core tables:
 
 ## Suggested Roadmap
 
-Good V0.7 candidates:
+Good next candidates:
 
-1. Add scoring, lane balance, and a reject log on top of the existing candidate pool.
+1. Run a real weekly trial and calibrate queries, weights, thresholds, and lane balance.
 2. Improve source-specific field coverage and diagnostics.
 3. Add a dry-run or source preview command.
-4. Later, consider OpenReview discovery through official APIs.
+4. Later, consider selected-item local organization or safe OA PDF download as a separate V0.8 task.
 
 Keep the boundary clear: collect clean metadata first, then build recommendation and reading workflows on top.
