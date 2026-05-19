@@ -1,0 +1,39 @@
+Files changed
+
+Runtime/config: src/app/config.py, src/app/runtime.py
+New ranking layer: src/ranking/config.py, src/ranking/scoring.py, src/ranking/balance.py, src/ranking/rejects.py
+Report integration: src/report/weekly_candidates.py
+Tests: tests/test_scoring.py, tests/test_weekly_candidates.py, tests/test_runtime_config.py
+Docs: README.md, AGENTS.md, docs/architecture.md, docs/testing.md, docs/changes.md
+Specs/plans: added V0.7 active spec/plan, archived V0.6.5 spec/plan, added docs/archive/INDEX.md
+Config files added/changed
+
+Added config/scoring.yaml
+Updated config/app.yaml with reject_log_filename_template: "rejected_candidates_{week}.md"
+Scoring behavior added
+
+Weekly report now scores candidates by default.
+Scoring is configurable and explainable: metadata, freshness, source quality, lane keyword matches, cross-domain signal, review/survey signal, and noise penalties.
+Candidate levels are S_candidate, A_candidate, B_candidate, C_candidate, reject.
+These are candidate-pool levels only, not final reading grades.
+Added --no-scoring to use the old metadata-ranking compatibility path.
+Reject log behavior
+
+Added --write-reject-log.
+Default output: data/reports/rejected_candidates_<YYYY-WW>.md
+Reject/downrank log groups by reason and respects reject_log_max_per_reason.
+Commands run
+
+uv --cache-dir .uv-cache run --extra dev pytest -q tests/test_scoring.py tests/test_weekly_candidates.py
+uv --cache-dir .uv-cache run --extra dev pytest -q
+Test result
+
+Targeted: 9 passed.
+Full suite: 39 passed.
+Remaining warning: pytest cannot write .pytest_cache in this Windows/OneDrive sandbox, but tests pass.
+Known limitations
+
+Default scoring weights are initial heuristics and need real weekly calibration.
+Cross-domain signal is simple keyword overlap, not semantic matching.
+Reject log is generated only when requested with --write-reject-log.
+No JSONL export format or SQLite schema change was introduced.

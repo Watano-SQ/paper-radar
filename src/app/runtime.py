@@ -29,3 +29,11 @@ def reject_log_path(runtime: RuntimeConfig, *, week_label: str | None = None) ->
         "rejected_candidates_{week}.md",
     )
     return runtime.paths.reports_dir / format_runtime_filename(template, week_label=week_label)
+
+
+def score_audit_path(runtime: RuntimeConfig, *, week_label: str | None = None) -> Path:
+    template = runtime.app.get("files", {}).get(
+        "score_audit_filename_template",
+        "score_audit_{week}.md",
+    )
+    return runtime.paths.reports_dir / format_runtime_filename(template, week_label=week_label)

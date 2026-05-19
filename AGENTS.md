@@ -14,7 +14,8 @@ Paper Radar 是一个合规的跨学科学术材料元数据抓取项目。仓�
 6. 可选 enrichment 源在已有条目基础上补全元数据。
 7. 运行弱去重后默认导出 `data/exports/candidates_<YYYY-WW>.jsonl`。
 8. weekly report 从 JSONL 候选池读取数据，按 `config/scoring.yaml` 做透明规则评分和 lane balance，生成候选池报告；可选生成 reject/downrank log。
-9. 可通过 diagnostics 工具检查本地状态。
+9. score audit 从 JSONL 候选池读取数据，复用 scoring 和 lane balance，生成校准诊断报告。
+10. 可通过 diagnostics 工具检查本地状态。
 
 当前已经实现：
 
@@ -25,7 +26,7 @@ Paper Radar 是一个合规的跨学科学术材料元数据抓取项目。仓�
 - SQLite 存储层，包含 `papers`、`paper_sources`、`crawl_runs`、`possible_duplicates`；
 - 中央 runtime 配置层，包含 `AppPaths`、`RuntimeConfig` 和 `config/app.yaml`；
 - 透明规则评分、lane balance、reject/downrank log；
-- 原始响应保存、JSONL 导出、弱去重、诊断命令、周候选池 Markdown 报告；
+- 原始响应保存、JSONL 导出、弱去重、诊断命令、周候选池 Markdown 报告、score audit Markdown 报告；
 - pytest 测试入口。
 
 当前不能声称已经实现：
@@ -76,11 +77,11 @@ Paper Radar 是一个合规的跨学科学术材料元数据抓取项目。仓�
 
 当前活跃设计说明：
 
-- `docs/specs/v0.7-scoring-balance-rejects.md`
+- `docs/specs/v0.7.1-score-audit-calibration.md`
 
 当前活跃执行计划：
 
-- `docs/plans/v0.7-scoring-balance-rejects.md`
+- `docs/plans/v0.7.1-score-audit-calibration.md`
 
 关键源码入口：
 
@@ -93,6 +94,7 @@ Paper Radar 是一个合规的跨学科学术材料元数据抓取项目。仓�
 - `src/pipeline/dedup.py`
 - `src/diagnostics.py`
 - `src/report/weekly_candidates.py`
+- `src/report/score_audit.py`
 - `src/ranking/`
 - `src/sources/`
 - `config/sources.yaml`

@@ -23,7 +23,8 @@ Paper Radar 用于合规地收集跨学科学术材料元数据，把不同官�
 11. `src.pipeline.dedup` 对当前收集条目和历史库做弱去重，疑似重复写入 `possible_duplicates`。
 12. `src.pipeline.export` 默认导出 `data/exports/candidates_<YYYY-WW>.jsonl`，目录和文件名模板可通过 runtime config 改变。
 13. `src.report.weekly_candidates` 从 JSONL 导出生成周候选池 Markdown 报告，默认使用 V0.7 规则评分、lane balance 和可选 reject/downrank log。
-14. `src.diagnostics` 可读取 SQLite 和 exports 状态。
+14. `src.report.score_audit` 从 JSONL 导出生成评分校准报告，复用同一 scoring 和 lane balance 逻辑，不修改 JSONL 或 SQLite。
+15. `src.diagnostics` 可读取 SQLite 和 exports 状态。
 
 ## 主要模块与职责
 
@@ -44,6 +45,7 @@ Paper Radar 用于合规地收集跨学科学术材料元数据，把不同官�
 - `src/utils/`：日期、HTTP、ID 和文本工具。
 - `src/diagnostics.py`：本地数据状态诊断。
 - `src/report/weekly_candidates.py`：从候选 JSONL 生成周候选池 Markdown 报告。
+- `src/report/score_audit.py`：从候选 JSONL 生成 score audit Markdown 校准报告。
 - `src/ranking/scoring.py`：规则评分和候选级别计算。
 - `src/ranking/balance.py`：duplicate 处理、lane balance、selected/rejected/downranked 决策。
 - `src/ranking/rejects.py`：reject/downrank Markdown log 渲染。
@@ -64,6 +66,7 @@ config/app.yaml + config/topics.yaml + config/sources.yaml + config/scoring.yaml
   -> export_jsonl writes runtime-configured JSONL candidate export
   -> report scores and balances exported candidates at report time
   -> optional reject/downrank log is written under runtime reports dir
+  -> optional score audit reports scoring behavior under runtime reports dir
   -> diagnostics reads local outputs
 ```
 
@@ -83,6 +86,7 @@ config/app.yaml + config/topics.yaml + config/sources.yaml + config/scoring.yaml
 - `data/exports/*.jsonl`：默认候选集导出目录，默认不提交 JSONL；可通过 runtime config 改变。
 - `data/reports/*.md`：默认周候选池报告输出目录，由报告命令生成，默认不提交；仓库只保留 `data/reports/.gitkeep`；可通过 runtime config 改变。
 - `data/reports/rejected_candidates_*.md`：可选 reject/downrank 调试日志，默认不提交；可通过 runtime config 文件名模板改变。
+- `data/reports/score_audit_*.md`：score audit 校准报告，默认不提交；可通过 runtime config 文件名模板改变。
 - `logs/*.log`：默认运行日志目录，默认不提交；可通过 runtime config 改变。
 
 ## Runtime 配置
@@ -116,6 +120,12 @@ V0.7 引入轻量、透明、可配置的 report-stage 规则评分层。评分�
 
 lane balance 会按配置限制每个 lane 的最大入选数量，并尝试为活跃 lane 保留最低候选数量。被硬拒绝、低于阈值、重复 canonical ID 或因 balance 未入选的候选可写入 reject/downrank log。
 
+## Score Audit
+
+V0.7.1 引入 `src.report.score_audit`，用于真实周运行后的评分校准。该命令读取已有 JSONL export，复用 runtime scoring 和 lane balance，输出 compact Markdown audit。报告包含 candidate level counts、lane/source stats、score component totals、penalty counts、near-threshold candidates、top/bottom selected candidates、rejected/downranked summary 和 deterministic calibration notes。
+
+score audit 是分析层，不改变 source crawling、不修改 SQLite schema、不修改 JSONL export 格式，也不使用外部 API。
+
 ## 重要边界
 
 - OpenAlex、arXiv、PubMed、bioRxiv、medRxiv 是发现源客户端，但是否运行由 `config/sources.yaml` 控制。
@@ -123,6 +133,7 @@ lane balance 会按配置限制每个 lane 的最大入选数量，并尝试为�
 - `possible_duplicates` 只记录疑似重复，不自动合并记录。
 - source 客户端不负责发现项目根目录；需要写入 raw response 时只使用调用方传入的 `raw_dir`。
 - V0.7 scoring 是规则评分，不是 LLM 排名或机器学习推荐系统。
+- V0.7.1 score audit 是校准报告，不是推荐模型。
 - 原始响应、数据库、导出和日志是运行产物，不是长期项目事实源。
 - 当前文档事实源在保留文档中；`docs/archive/` 只提供历史上下文。
 

@@ -10,6 +10,7 @@
 - 涉及外部 API 的命令可能产生网络请求、写入 `data/` 和 `logs/`，运行前检查 `config/sources.yaml`。
 - V0.6.5 起，默认运行路径由 `config/app.yaml` 和 runtime 环境变量解析；默认本地路径保持不变。
 - V0.7 起，周候选池报告默认使用 `config/scoring.yaml` 做透明规则评分和 lane balance。
+- V0.7.1 起，可通过 score audit 报告检查真实候选池上的评分校准表现。
 
 ## 环境准备
 
@@ -43,6 +44,12 @@ uv run --extra dev pytest -q tests/test_runtime_config.py tests/test_weekly_cand
 
 ```bash
 uv run --extra dev pytest -q tests/test_scoring.py tests/test_weekly_candidates.py
+```
+
+运行 score audit 相关测试：
+
+```bash
+uv run --extra dev pytest -q tests/test_score_audit.py tests/test_scoring.py tests/test_weekly_candidates.py
 ```
 
 ## 本地抓取
@@ -113,6 +120,26 @@ uv run python -m src.report.weekly_candidates --no-scoring
 
 ```bash
 uv run python -m src.report.weekly_candidates --export-file data/exports/candidates_2026-W21.jsonl --output-dir data/reports
+```
+
+## Score Audit
+
+从候选 JSONL 生成评分校准报告：
+
+```bash
+uv run python -m src.report.score_audit
+```
+
+默认读取当前周或最新的 candidate export，并输出到 `data/reports/score_audit_<YYYY-WW>.md`。
+
+可显式指定配置目录、输入、输出和 lane limit：
+
+```bash
+uv run python -m src.report.score_audit --config-dir config
+uv run python -m src.report.score_audit --export-file data/exports/candidates_2026-W21.jsonl
+uv run python -m src.report.score_audit --output-dir data/reports
+uv run python -m src.report.score_audit --per-lane 20
+uv run python -m src.report.score_audit --compare-no-scoring
 ```
 
 ## Runtime 路径配置

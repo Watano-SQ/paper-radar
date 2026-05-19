@@ -24,6 +24,7 @@ DEFAULT_APP_CONFIG: dict[str, Any] = {
         "export_filename_template": "candidates_{week}.jsonl",
         "weekly_report_filename_template": "weekly_candidates_{week}.md",
         "reject_log_filename_template": "rejected_candidates_{week}.md",
+        "score_audit_filename_template": "score_audit_{week}.md",
     },
     "obsidian": {
         "enabled": False,

@@ -6,6 +6,56 @@
 
 ### 决策
 
+落地 V0.7.1 score audit 校准报告，用于真实周运行后的评分调试。
+
+- 为什么：
+  - V0.7 已加入规则评分、lane balance 和 reject/downrank log，但默认权重仍是初始启发式。
+  - 在进入 PDF 下载、Zotero、Obsidian、LLM selection 或新 source 前，需要先检查 scoring 在真实 candidate export 上是否合理。
+  - 校准需要回答 lane/source 是否主导、component/penalty 是否异常、哪些候选接近阈值、哪些 lane 被系统性低选等问题。
+
+- 决定：
+  - 新增 `src.report.score_audit`，作为只读分析/reporting 层。
+  - 新增 `config/app.yaml` 的 `score_audit_filename_template`，默认 `score_audit_{week}.md`。
+  - 新增 `src.app.runtime.score_audit_path()`。
+  - score audit 默认读取当前周 candidate export，不存在则读取最新 export；输出到 runtime reports dir。
+  - score audit 复用现有 `score_candidates()` 和 `select_balanced_candidates()`，不修改 scoring 权重、不改变 JSONL export、不改变 SQLite schema。
+  - CLI 支持 `--config-dir`、`--export-file`、`--output-dir`、`--per-lane`、`--compare-no-scoring`。
+
+- 已实现：
+  - `src/report/score_audit.py`
+  - `tests/test_score_audit.py`
+  - `docs/specs/v0.7.1-score-audit-calibration.md`
+  - `docs/plans/v0.7.1-score-audit-calibration.md`
+  - V0.7 活跃 spec/plan 已归档到 `docs/archive/specs/` 和 `docs/archive/plans/`。
+  - `docs/archive/INDEX.md` 已记录 V0.7 -> V0.7.1 取代关系。
+
+- 报告内容：
+  - summary、candidate level counts、selected by lane、selected by source；
+  - top score components、top penalties、near-threshold candidates；
+  - top/bottom selected candidates、rejected/downranked summary；
+  - deterministic calibration notes；
+  - 可选 no-scoring metadata ranking overlap 对比。
+
+- 已拒绝的替代方案：
+  - 拒绝 LLM 调用、LLM ranking、PDF 下载、Zotero、Obsidian plugin、Anki、Telegram / Email、vector database。
+  - 拒绝新增 OpenReview / CORE / IEEE 客户端。
+  - 拒绝修改 source crawling 行为、SQLite schema 或 JSONL export 格式。
+
+- 接受的风险或债务：
+  - score audit 只提供确定性诊断，不自动改权重。
+  - no-scoring comparison 是轻量 overlap 统计，不是完整实验框架。
+  - pytest 在当前 Windows/OneDrive 沙箱中仍会报告 `.pytest_cache` 写入权限警告；测试本身通过。
+
+- 取代关系：
+  - `docs/specs/v0.7.1-score-audit-calibration.md` 取代 `docs/archive/specs/v0.7-scoring-balance-rejects.md` 作为当前活跃设计说明。
+  - `docs/plans/v0.7.1-score-audit-calibration.md` 取代 `docs/archive/plans/v0.7-scoring-balance-rejects.md` 作为当前活跃执行计划。
+
+- 验证：
+  - `uv --cache-dir .uv-cache run --extra dev pytest -q tests/test_score_audit.py tests/test_scoring.py tests/test_weekly_candidates.py` 通过，结果为 14 passed。
+  - `uv --cache-dir .uv-cache run --extra dev pytest -q` 通过，结果为 44 passed。
+
+### 决策
+
 落地 V0.7 的透明规则评分、lane balance 和 reject/downrank log。
 
 - 为什么：

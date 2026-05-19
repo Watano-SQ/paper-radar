@@ -2,11 +2,11 @@
 
 Paper Radar is a compliant cross-disciplinary academic metadata radar for personal use.
 
-The current version is V0.7. It collects recent academic metadata from official APIs and public APIs, normalizes records into one `PaperItem` model, stores them in SQLite, exports a JSONL candidate pool, and can generate a lightweight weekly Markdown candidate report with transparent rule-based candidate scoring, lane balance, and an optional reject/downrank log.
+The current version is V0.7.1. It collects recent academic metadata from official APIs and public APIs, normalizes records into one `PaperItem` model, stores them in SQLite, exports a JSONL candidate pool, and can generate a lightweight weekly Markdown candidate report with transparent rule-based candidate scoring, lane balance, and an optional reject/downrank log. V0.7.1 adds a score-audit report for calibration after real weekly trial runs.
 
 It is not a general-purpose crawler, not a Google Scholar scraper, not a PDF downloader, and not a Zotero replacement.
 
-## V0.7 Capabilities
+## V0.7.1 Capabilities
 
 - Unified `PaperItem` model.
 - DOI, arXiv ID, title, and PMID-aware canonical ID generation.
@@ -25,9 +25,10 @@ It is not a general-purpose crawler, not a Google Scholar scraper, not a PDF dow
 - Rule-based candidate scoring through `config/scoring.yaml` and `src.ranking`.
 - Configurable lane balance for weekly candidate reports.
 - Optional reject/downrank log for debugging report filtering decisions.
+- Score-audit Markdown report for inspecting scoring calibration.
 - Pytest coverage for normalization, storage, enrichment, deduplication, diagnostics, PubMed, bioRxiv/medRxiv, and report generation.
 
-## What V0.7 Does Not Do
+## What V0.7.1 Does Not Do
 
 - It does not scrape Google Scholar.
 - It does not scrape publisher HTML pages.
@@ -221,6 +222,22 @@ Use the compatibility metadata ranking path:
 uv run python -m src.report.weekly_candidates --no-scoring
 ```
 
+Generate a score-audit calibration report:
+
+```bash
+uv run python -m src.report.score_audit
+```
+
+Useful score-audit options:
+
+```bash
+uv run python -m src.report.score_audit --config-dir config
+uv run python -m src.report.score_audit --export-file data/exports/candidates_2026-W21.jsonl
+uv run python -m src.report.score_audit --output-dir data/reports
+uv run python -m src.report.score_audit --per-lane 20
+uv run python -m src.report.score_audit --compare-no-scoring
+```
+
 Run tests:
 
 ```bash
@@ -272,6 +289,14 @@ When requested with `--write-reject-log`, V0.7 also writes:
 data/reports/rejected_candidates_<YYYY-WW>.md
 ```
 
+The score audit reads the same candidate export and writes:
+
+```bash
+data/reports/score_audit_<YYYY-WW>.md
+```
+
+It includes candidate level counts, lane/source stats, score component totals, penalty counts, near-threshold candidates, top/bottom selected candidates, rejected/downranked summaries, and deterministic calibration notes.
+
 ## Output Files
 
 Pipeline runs can generate:
@@ -281,6 +306,7 @@ Pipeline runs can generate:
 - `data/exports/candidates_<YYYY-WW>.jsonl`: normalized candidate export.
 - `data/reports/weekly_candidates_<YYYY-WW>.md`: lightweight weekly candidate report.
 - `data/reports/rejected_candidates_<YYYY-WW>.md`: optional reject/downrank debug log.
+- `data/reports/score_audit_<YYYY-WW>.md`: score calibration audit report.
 - `logs/crawl_<YYYY-WW>.log`: crawl logs.
 
 These are the default local paths. V0.6.5 allows them to be redirected through `config/app.yaml` or the supported runtime environment variables.
@@ -308,7 +334,7 @@ Core tables:
 
 Good next candidates:
 
-1. Run a real weekly trial and calibrate queries, weights, thresholds, and lane balance.
+1. Run a real weekly trial and manually calibrate `config/topics.yaml` and `config/scoring.yaml`.
 2. Improve source-specific field coverage and diagnostics.
 3. Add a dry-run or source preview command.
 4. Later, consider selected-item local organization or safe OA PDF download as a separate V0.8 task.
