@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import argparse
 import logging
 from collections.abc import Iterable
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-import yaml
-
+from src.app.config import RuntimeConfig, load_runtime_config
+from src.app.runtime import candidate_export_path
 from src.pipeline.export import export_jsonl
 from src.pipeline.logging_utils import setup_logging
 from src.pipeline.store import PaperStore
@@ -19,17 +20,21 @@ from src.sources.crossref import CrossrefClient
 from src.sources.openalex import OpenAlexClient
 from src.sources.pubmed import PubMedClient
 from src.sources.semantic_scholar import SemanticScholarClient
-from src.utils.dates import iso_week_label
 
 
-ROOT = Path.cwd() if (Path.cwd() / "config" / "sources.yaml").exists() else Path(__file__).resolve().parents[1]
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description="Run the Paper Radar metadata pipeline.")
+    parser.add_argument("--config-dir", type=Path, default=None)
+    args = parser.parse_args(argv)
+    runtime = load_runtime_config(config_dir=args.config_dir)
+    run_pipeline(runtime)
 
 
-def main() -> None:
-    logger = setup_logging(ROOT / "logs")
-    sources_config = load_yaml(ROOT / "config" / "sources.yaml").get("sources", {})
-    topics_config = load_yaml(ROOT / "config" / "topics.yaml").get("lanes", {})
-    store = PaperStore(ROOT / "data" / "papers.sqlite")
+def run_pipeline(runtime: RuntimeConfig) -> Path:
+    logger = setup_logging(runtime.paths.logs_dir)
+    sources_config = runtime.sources
+    topics_config = runtime.topics
+    store = PaperStore(runtime.paths.database_path)
     collected_ids: set[str] = set()
 
     try:
@@ -44,7 +49,7 @@ def main() -> None:
             if not config.get("enabled", False):
                 logger.info("source=%s skipped because it is disabled", source_name)
                 continue
-            client = client_cls(config, ROOT / "data" / "raw")
+            client = client_cls(config, runtime.paths.raw_dir)
             collected_ids.update(run_source(client, config, topics_config, store, logger))
 
         collected_ids.update(
@@ -55,6 +60,7 @@ def main() -> None:
                 store,
                 collected_ids,
                 logger,
+                runtime.paths.raw_dir,
             )
         )
         collected_ids.update(
@@ -65,13 +71,15 @@ def main() -> None:
                 store,
                 collected_ids,
                 logger,
+                runtime.paths.raw_dir,
             )
         )
         detect_and_store_duplicates(store, collected_ids, logger)
 
-        output_path = ROOT / "data" / "exports" / f"candidates_{iso_week_label()}.jsonl"
+        output_path = candidate_export_path(runtime)
         exported = export_jsonl(store.fetch_paper_items(collected_ids), output_path)
         logger.info("exported=%s path=%s", exported, output_path)
+        return output_path
     finally:
         store.close()
 
@@ -140,11 +148,12 @@ def run_enrichment(
     store: PaperStore,
     collected_ids: set[str],
     logger: logging.Logger,
+    raw_dir: Path,
 ) -> set[str]:
     if not config.get("enabled", False):
         logger.info("source=%s skipped because it is disabled", source_name)
         return set()
-    client = client_cls(config, ROOT / "data" / "raw")
+    client = client_cls(config, raw_dir)
     unavailable_reason = getattr(client, "unavailable_reason", None)
     if unavailable_reason:
         logger.warning("source=%s skipped: %s", source_name, unavailable_reason)
@@ -239,11 +248,6 @@ def build_queries(
                     days_back=days_back,
                     limit=per_query_limit,
                 )
-
-
-def load_yaml(path: Path) -> dict[str, Any]:
-    with path.open("r", encoding="utf-8") as handle:
-        return yaml.safe_load(handle) or {}
 
 
 if __name__ == "__main__":

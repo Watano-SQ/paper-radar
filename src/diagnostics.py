@@ -1,20 +1,30 @@
 from __future__ import annotations
 
+import argparse
 import sqlite3
 from pathlib import Path
 from typing import Any
 
-
-ROOT = Path.cwd() if (Path.cwd() / "config" / "sources.yaml").exists() else Path(__file__).resolve().parents[1]
+from src.app.config import RuntimeConfig, load_runtime_config
 
 
 def collect_diagnostics(
     db_path: Path | None = None,
     exports_dir: Path | None = None,
+    runtime: RuntimeConfig | None = None,
+    export_filename_template: str | None = None,
 ) -> dict[str, Any]:
-    db_path = db_path or ROOT / "data" / "papers.sqlite"
-    exports_dir = exports_dir or ROOT / "data" / "exports"
-    latest_export = _latest_export(exports_dir)
+    if runtime is None and (db_path is None or exports_dir is None):
+        runtime = load_runtime_config()
+    if runtime is not None:
+        db_path = db_path or runtime.paths.database_path
+        exports_dir = exports_dir or runtime.paths.exports_dir
+        export_filename_template = export_filename_template or runtime.app.get("files", {}).get(
+            "export_filename_template"
+        )
+    if db_path is None or exports_dir is None:
+        raise ValueError("db_path and exports_dir are required when runtime is not available")
+    latest_export = _latest_export(exports_dir, export_filename_template)
     result: dict[str, Any] = {
         "db_path": str(db_path),
         "papers_count": None,
@@ -63,8 +73,12 @@ def format_diagnostics(diagnostics: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def main() -> None:
-    print(format_diagnostics(collect_diagnostics()))
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description="Inspect local Paper Radar runtime state.")
+    parser.add_argument("--config-dir", type=Path, default=None)
+    args = parser.parse_args(argv)
+    runtime = load_runtime_config(config_dir=args.config_dir)
+    print(format_diagnostics(collect_diagnostics(runtime=runtime)))
 
 
 def _scalar(conn: sqlite3.Connection, query: str) -> int:
@@ -72,10 +86,11 @@ def _scalar(conn: sqlite3.Connection, query: str) -> int:
     return int(row[0])
 
 
-def _latest_export(exports_dir: Path) -> Path | None:
+def _latest_export(exports_dir: Path, filename_template: str | None = None) -> Path | None:
     if not exports_dir.exists():
         return None
-    candidates = sorted(exports_dir.glob("candidates_*.jsonl"), key=lambda path: path.stat().st_mtime, reverse=True)
+    pattern = (filename_template or "candidates_{week}.jsonl").format(week="*")
+    candidates = sorted(exports_dir.glob(pattern), key=lambda path: path.stat().st_mtime, reverse=True)
     return candidates[0] if candidates else None
 
 

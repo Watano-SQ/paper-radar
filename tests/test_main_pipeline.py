@@ -26,6 +26,7 @@ def test_enrichment_none_marks_crawl_run_skipped(tmp_path: Path) -> None:
             store,
             {item.canonical_id},
             logging.getLogger("test"),
+            tmp_path / "raw",
         )
         assert updated_ids == set()
         row = store.conn.execute(

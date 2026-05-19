@@ -12,19 +12,24 @@ Paper Radar 用于合规地收集跨学科学术材料元数据，把不同官�
 
 1. `config/topics.yaml` 定义兴趣 lane、关键词和 arXiv 分类。
 2. `config/sources.yaml` 定义来源启用状态、请求限额、延迟、API key 环境变量名和 enrichment 开关。
-3. `src/main.py` 加载配置，创建 `PaperStore`，按来源构造查询。
-4. 已启用的来源客户端抓取原始数据，并保存原始响应到 `data/raw/<source>/<YYYY-WW>/`。
-5. 来源客户端将原始记录规范化为 `PaperItem`。
-6. `PaperStore` 将条目 upsert 到 SQLite，并记录来源、查询、抓取状态。
-7. Crossref 和 Semantic Scholar 可作为 enrichment 源处理已有条目，不作为默认发现源。
-8. `src.pipeline.dedup` 对当前收集条目和历史库做弱去重，疑似重复写入 `possible_duplicates`。
-9. `src.pipeline.export` 导出 `data/exports/candidates_<YYYY-WW>.jsonl`。
-10. `src.diagnostics` 可读取 SQLite 和 exports 状态；`src.report.weekly_candidates` 可从 JSONL 导出生成周候选池 Markdown 报告。
+3. `config/app.yaml` 定义默认本地运行路径、导出文件名模板和报告文件名模板。
+4. `src.app.config` 加载 runtime config，解析 `AppPaths`；相对路径默认按项目根目录解析，绝对路径保持不变。
+5. `src/main.py` 创建 `PaperStore`，按来源构造查询。
+6. 已启用的来源客户端抓取原始数据，并默认保存原始响应到 `data/raw/<source>/<YYYY-WW>/`；raw 目录可通过 runtime config 改变。
+7. 来源客户端将原始记录规范化为 `PaperItem`。
+8. `PaperStore` 将条目 upsert 到 SQLite，并记录来源、查询、抓取状态。
+9. Crossref 和 Semantic Scholar 可作为 enrichment 源处理已有条目，不作为默认发现源。
+10. `src.pipeline.dedup` 对当前收集条目和历史库做弱去重，疑似重复写入 `possible_duplicates`。
+11. `src.pipeline.export` 默认导出 `data/exports/candidates_<YYYY-WW>.jsonl`，目录和文件名模板可通过 runtime config 改变。
+12. `src.diagnostics` 可读取 SQLite 和 exports 状态；`src.report.weekly_candidates` 可从 JSONL 导出生成周候选池 Markdown 报告，默认输出目录和文件名模板来自 runtime config。
 
 ## 主要模块与职责
 
-- `config/`：维护兴趣方向、来源开关、请求限额和外部服务环境变量名。
-- `src/main.py`：主编排入口，负责加载配置、运行来源、运行 enrichment、去重和导出。
+- `config/`：维护兴趣方向、来源开关、请求限额、外部服务环境变量名和本地 runtime 路径。
+- `config/app.yaml`：维护默认本地输出路径、数据库路径、文件名模板和未来 Obsidian 配置脚手架；当前不实现 Obsidian 写入。
+- `src/app/config.py`：加载 `config/app.yaml`、`config/sources.yaml`、`config/topics.yaml`，解析 `AppPaths` 和 `RuntimeConfig`。
+- `src/app/runtime.py`：根据 runtime 文件名模板构造候选导出路径和周报路径。
+- `src/main.py`：主编排入口，负责运行来源、运行 enrichment、去重和导出；`run_pipeline(runtime)` 可由 CLI 以外的代码调用。
 - `src/models/paper.py`：统一论文元数据模型 `PaperItem`。
 - `src/sources/`：外部来源客户端。当前包含 OpenAlex、arXiv、PubMed、bioRxiv、medRxiv、Crossref、Semantic Scholar。
 - `src/pipeline/normalize.py`：规范化和最终化 `PaperItem`。
@@ -41,15 +46,16 @@ Paper Radar 用于合规地收集跨学科学术材料元数据，把不同官�
 ## 数据流
 
 ```text
-config/topics.yaml + config/sources.yaml
+config/app.yaml + config/topics.yaml + config/sources.yaml
+  -> src.app.config builds RuntimeConfig and AppPaths
   -> src.main builds SourceQuery values
   -> source clients fetch official/public APIs
-  -> data/raw/<source>/<YYYY-WW>/ stores raw responses
+  -> runtime.paths.raw_dir/<source>/<YYYY-WW>/ stores raw responses
   -> source clients normalize RawItem to PaperItem
   -> PaperStore upserts SQLite rows
   -> enrichment clients optionally update existing items
   -> weak dedup records possible_duplicates
-  -> export_jsonl writes data/exports/candidates_<YYYY-WW>.jsonl
+  -> export_jsonl writes runtime-configured JSONL candidate export
   -> diagnostics/report tools read local outputs
 ```
 
@@ -64,17 +70,33 @@ config/topics.yaml + config/sources.yaml
 
 运行产物：
 
-- `data/papers.sqlite`：本地数据库，默认不提交。
-- `data/raw/`：原始 API 响应，默认不提交具体抓取文件。
-- `data/exports/*.jsonl`：候选集导出，默认不提交 JSONL。
-- `data/reports/*.md`：周候选池报告输出，由报告命令生成，默认不提交；仓库只保留 `data/reports/.gitkeep`。
-- `logs/*.log`：运行日志，默认不提交。
+- `data/papers.sqlite`：默认本地数据库，默认不提交；可通过 runtime config 改变。
+- `data/raw/`：默认原始 API 响应目录，默认不提交具体抓取文件；可通过 runtime config 改变。
+- `data/exports/*.jsonl`：默认候选集导出目录，默认不提交 JSONL；可通过 runtime config 改变。
+- `data/reports/*.md`：默认周候选池报告输出目录，由报告命令生成，默认不提交；仓库只保留 `data/reports/.gitkeep`；可通过 runtime config 改变。
+- `logs/*.log`：默认运行日志目录，默认不提交；可通过 runtime config 改变。
+
+## Runtime 配置
+
+V0.6.5 引入 `RuntimeConfig` 和 `AppPaths`，把路径解析集中在 `src.app.config`。默认本地行为保持不变，但以下路径可在 `config/app.yaml` 中调整：
+
+- `app.data_dir`
+- `app.raw_dir`
+- `app.exports_dir`
+- `app.reports_dir`
+- `app.logs_dir`
+- `app.database_path`
+
+相对路径默认解析到项目根目录下。绝对路径保持绝对路径。`PAPER_RADAR_CONFIG_DIR` 可切换配置目录；`PAPER_RADAR_DATA_DIR`、`PAPER_RADAR_REPORTS_DIR`、`PAPER_RADAR_EXPORTS_DIR`、`PAPER_RADAR_LOGS_DIR`、`PAPER_RADAR_DATABASE_PATH` 可覆盖主要运行路径。
+
+`config/app.yaml` 中的 `obsidian` 段只是未来兼容脚手架。当前不会写入 Obsidian vault，也没有 Obsidian 插件实现。
 
 ## 重要边界
 
 - OpenAlex、arXiv、PubMed、bioRxiv、medRxiv 是发现源客户端，但是否运行由 `config/sources.yaml` 控制。
 - Crossref、Semantic Scholar 当前是 enrichment 源，不是默认发现源。
 - `possible_duplicates` 只记录疑似重复，不自动合并记录。
+- source 客户端不负责发现项目根目录；需要写入 raw response 时只使用调用方传入的 `raw_dir`。
 - 原始响应、数据库、导出和日志是运行产物，不是长期项目事实源。
 - 当前文档事实源在保留文档中；`docs/archive/` 只提供历史上下文。
 

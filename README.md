@@ -2,11 +2,11 @@
 
 Paper Radar is a compliant cross-disciplinary academic metadata radar for personal use.
 
-The current version is V0.6. It collects recent academic metadata from official APIs and public APIs, normalizes records into one `PaperItem` model, stores them in SQLite, exports a JSONL candidate pool, and can generate a lightweight weekly Markdown candidate report.
+The current version is V0.6.5. It collects recent academic metadata from official APIs and public APIs, normalizes records into one `PaperItem` model, stores them in SQLite, exports a JSONL candidate pool, and can generate a lightweight weekly Markdown candidate report. V0.6.5 adds centralized runtime path configuration while keeping the default local behavior unchanged.
 
 It is not a general-purpose crawler, not a Google Scholar scraper, not a PDF downloader, and not a Zotero replacement.
 
-## V0.6 Capabilities
+## V0.6.5 Capabilities
 
 - Unified `PaperItem` model.
 - DOI, arXiv ID, title, and PMID-aware canonical ID generation.
@@ -21,9 +21,10 @@ It is not a general-purpose crawler, not a Google Scholar scraper, not a PDF dow
 - JSONL candidate export under `data/exports/`.
 - Lightweight weekly candidate-pool Markdown reports under `data/reports/`.
 - Diagnostics for local database and export state.
+- Central runtime path configuration through `config/app.yaml` and `src.app`.
 - Pytest coverage for normalization, storage, enrichment, deduplication, diagnostics, PubMed, bioRxiv/medRxiv, and report generation.
 
-## What V0.6 Does Not Do
+## What V0.6.5 Does Not Do
 
 - It does not scrape Google Scholar.
 - It does not scrape publisher HTML pages.
@@ -123,6 +124,33 @@ Crossref and Semantic Scholar are enrichment sources in this project. They are n
 - Semantic Scholar does not do title search by default.
 - Semantic Scholar defaults to `require_api_key: true`; if enabled without `S2_API_KEY`, it is skipped with a warning.
 
+## Configure Runtime Paths
+
+Edit:
+
+```bash
+config/app.yaml
+```
+
+Default local paths remain:
+
+- `data/papers.sqlite`
+- `data/raw/`
+- `data/exports/`
+- `data/reports/`
+- `logs/`
+
+Relative paths in `config/app.yaml` resolve under the project root. Absolute paths remain absolute. The `obsidian` section is scaffolding for a possible future packaging mode only; Paper Radar does not currently write to an Obsidian vault or implement an Obsidian plugin.
+
+Supported environment overrides:
+
+- `PAPER_RADAR_CONFIG_DIR`
+- `PAPER_RADAR_DATA_DIR`
+- `PAPER_RADAR_REPORTS_DIR`
+- `PAPER_RADAR_EXPORTS_DIR`
+- `PAPER_RADAR_LOGS_DIR`
+- `PAPER_RADAR_DATABASE_PATH`
+
 ## Run Locally
 
 For the authoritative validation and run-command reference, see `docs/testing.md`.
@@ -139,16 +167,30 @@ Run the metadata pipeline:
 uv run python -m src.main
 ```
 
+Or with an explicit config directory:
+
+```bash
+uv run python -m src.main --config-dir config
+```
+
 Run diagnostics:
 
 ```bash
 uv run python -m src.diagnostics
 ```
 
+```bash
+uv run python -m src.diagnostics --config-dir config
+```
+
 Generate the weekly candidate-pool report:
 
 ```bash
 uv run python -m src.report.weekly_candidates
+```
+
+```bash
+uv run python -m src.report.weekly_candidates --config-dir config
 ```
 
 Run tests:
@@ -159,7 +201,7 @@ uv run --extra dev pytest -q
 
 ## Weekly Candidate Report
 
-The report command reads `data/exports/candidates_<YYYY-WW>.jsonl` for the current week. If the current week export does not exist, it uses the latest available export.
+The report command reads `data/exports/candidates_<YYYY-WW>.jsonl` for the current week. If the current week export does not exist, it uses the latest available export. The default export directory and report output directory come from `config/app.yaml`.
 
 It writes:
 
@@ -202,6 +244,8 @@ Pipeline runs can generate:
 - `data/reports/weekly_candidates_<YYYY-WW>.md`: lightweight weekly candidate report.
 - `logs/crawl_<YYYY-WW>.log`: crawl logs.
 
+These are the default local paths. V0.6.5 allows them to be redirected through `config/app.yaml` or the supported runtime environment variables.
+
 Runtime artifacts are ignored by git except for placeholder files.
 
 ## Maintained Docs
@@ -225,9 +269,9 @@ Core tables:
 
 Good V0.7 candidates:
 
-1. Add OpenReview discovery through official APIs.
+1. Add scoring, lane balance, and a reject log on top of the existing candidate pool.
 2. Improve source-specific field coverage and diagnostics.
 3. Add a dry-run or source preview command.
-4. Add a separate LLM screening prompt that selects exactly 13 weekly radar items from the candidate report.
+4. Later, consider OpenReview discovery through official APIs.
 
 Keep the boundary clear: collect clean metadata first, then build recommendation and reading workflows on top.

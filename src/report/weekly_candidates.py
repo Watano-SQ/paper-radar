@@ -7,15 +7,19 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
+from src.app.config import RuntimeConfig, load_runtime_config
+from src.app.runtime import format_runtime_filename
 from src.utils.dates import iso_week_label, to_iso_date
 
 
-ROOT = Path.cwd() if (Path.cwd() / "config" / "sources.yaml").exists() else Path(__file__).resolve().parents[2]
 DEFAULT_PER_LANE = 20
+DEFAULT_EXPORT_FILENAME_TEMPLATE = "candidates_{week}.jsonl"
+DEFAULT_WEEKLY_REPORT_FILENAME_TEMPLATE = "weekly_candidates_{week}.md"
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Generate a weekly Markdown candidate pool report.")
+    parser.add_argument("--config-dir", type=Path, default=None)
     parser.add_argument("--export-file", type=Path, default=None)
     parser.add_argument("--output-dir", type=Path, default=None)
     parser.add_argument(
@@ -23,11 +27,13 @@ def main() -> None:
         type=int,
         default=int(os.getenv("PAPER_RADAR_REPORT_PER_LANE", DEFAULT_PER_LANE)),
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    runtime = load_runtime_config(config_dir=args.config_dir)
     path = generate_weekly_candidate_report(
         export_file=args.export_file,
         output_dir=args.output_dir,
         per_lane=args.per_lane,
+        runtime=runtime,
     )
     print(path)
 
@@ -39,19 +45,48 @@ def generate_weekly_candidate_report(
     output_dir: Path | None = None,
     week_label: str | None = None,
     per_lane: int = DEFAULT_PER_LANE,
+    runtime: RuntimeConfig | None = None,
+    export_filename_template: str | None = None,
+    weekly_report_filename_template: str | None = None,
 ) -> Path:
-    exports_dir = exports_dir or ROOT / "data" / "exports"
-    output_dir = output_dir or ROOT / "data" / "reports"
-    selected_export = export_file or select_export_file(exports_dir, week_label or iso_week_label())
+    if runtime is None and (
+        exports_dir is None
+        or output_dir is None
+        or export_filename_template is None
+        or weekly_report_filename_template is None
+    ):
+        runtime = load_runtime_config()
+    if runtime is not None:
+        exports_dir = exports_dir or runtime.paths.exports_dir
+        output_dir = output_dir or runtime.paths.reports_dir
+        files_config = runtime.app.get("files", {})
+        export_filename_template = export_filename_template or files_config.get(
+            "export_filename_template",
+            DEFAULT_EXPORT_FILENAME_TEMPLATE,
+        )
+        weekly_report_filename_template = weekly_report_filename_template or files_config.get(
+            "weekly_report_filename_template",
+            DEFAULT_WEEKLY_REPORT_FILENAME_TEMPLATE,
+        )
+    exports_dir = exports_dir or Path("data") / "exports"
+    output_dir = output_dir or Path("data") / "reports"
+    export_filename_template = export_filename_template or DEFAULT_EXPORT_FILENAME_TEMPLATE
+    weekly_report_filename_template = weekly_report_filename_template or DEFAULT_WEEKLY_REPORT_FILENAME_TEMPLATE
+
+    selected_export = export_file or select_export_file(
+        exports_dir,
+        week_label or iso_week_label(),
+        filename_template=export_filename_template,
+    )
     if selected_export is None:
         raise FileNotFoundError(f"No candidate export found in {exports_dir}")
-    report_week = week_label or _week_from_export(selected_export) or iso_week_label()
+    report_week = week_label or _week_from_export(selected_export, export_filename_template) or iso_week_label()
     candidates = load_candidates(selected_export)
     deduped = dedupe_candidates(candidates)
     groups = group_candidates(deduped)
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / f"weekly_candidates_{report_week}.md"
+    output_path = output_dir / format_runtime_filename(weekly_report_filename_template, week_label=report_week)
     output_path.write_text(
         render_report(
             groups=groups,
@@ -65,13 +100,22 @@ def generate_weekly_candidate_report(
     return output_path
 
 
-def select_export_file(exports_dir: Path, current_week: str) -> Path | None:
-    current = exports_dir / f"candidates_{current_week}.jsonl"
+def select_export_file(
+    exports_dir: Path,
+    current_week: str,
+    *,
+    filename_template: str = DEFAULT_EXPORT_FILENAME_TEMPLATE,
+) -> Path | None:
+    current = exports_dir / format_runtime_filename(filename_template, week_label=current_week)
     if current.exists():
         return current
     if not exports_dir.exists():
         return None
-    candidates = sorted(exports_dir.glob("candidates_*.jsonl"), key=lambda path: path.stat().st_mtime, reverse=True)
+    candidates = sorted(
+        exports_dir.glob(_template_glob(filename_template)),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
     return candidates[0] if candidates else None
 
 
@@ -243,11 +287,18 @@ def _clean_inline(value: Any) -> str | None:
     return text or None
 
 
-def _week_from_export(path: Path) -> str | None:
-    stem = path.stem
-    prefix = "candidates_"
-    if stem.startswith(prefix):
-        return stem.removeprefix(prefix)
+def _template_glob(template: str) -> str:
+    return format_runtime_filename(template, week_label="*")
+
+
+def _week_from_export(path: Path, filename_template: str = DEFAULT_EXPORT_FILENAME_TEMPLATE) -> str | None:
+    name = path.name
+    marker = "{week}"
+    if marker not in filename_template:
+        return None
+    prefix, suffix = filename_template.split(marker, 1)
+    if name.startswith(prefix) and name.endswith(suffix):
+        return name[len(prefix) : len(name) - len(suffix) if suffix else len(name)]
     return None
 
 

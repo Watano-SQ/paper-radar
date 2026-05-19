@@ -1,0 +1,17 @@
+app:
+  data_dir: data
+  raw_dir: data/raw
+  exports_dir: data/exports
+  reports_dir: data/reports
+  logs_dir: logs
+  database_path: data/papers.sqlite
+
+files:
+  export_filename_template: "candidates_{week}.jsonl"
+  weekly_report_filename_template: "weekly_candidates_{week}.md"
+
+obsidian:
+  enabled: false
+  vault_dir: ""
+  weekly_report_dir: "Knowledge Radar/Weekly"
+  export_dir: "Knowledge Radar/Exports"

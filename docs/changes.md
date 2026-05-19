@@ -6,6 +6,51 @@
 
 ### 决策
 
+落地 V0.6.5 runtime 路径配置层，保留默认本地 CLI 行为。
+
+- 为什么：
+  - 当前 V0.6 已能完成合规元数据抓取、存储、导出、诊断和周候选池报告，但路径仍分散硬编码在本地脚本入口中。
+  - 后续可能需要 scheduled、Docker 或 Obsidian 相关包装方式，因此核心 pipeline 需要能由外部调用方传入 runtime 路径，而不是每个模块自行猜测项目根目录。
+  - 这不是评分、推荐、PDF、Zotero、Obsidian 插件或新 source 任务。
+
+- 决定：
+  - 新增 `config/app.yaml` 作为本地 runtime 路径和文件名模板配置入口。
+  - 新增 `src.app.config` 中的 `AppPaths`、`RuntimeConfig` 和 `load_runtime_config()`。
+  - 新增 `src.app.runtime`，集中构造候选导出路径和周报路径。
+  - `src.main` 改为 `run_pipeline(runtime)` + `main(argv)` 结构，主流程不再包含模块级硬编码 `ROOT`。
+  - `src.diagnostics` 和 `src.report.weekly_candidates` 不再依赖模块级硬编码 `ROOT`，默认路径来自 runtime config。
+  - `src.main`、`src.diagnostics`、`src.report.weekly_candidates` 均支持 `--config-dir`。
+  - 支持 `PAPER_RADAR_CONFIG_DIR`、`PAPER_RADAR_DATA_DIR`、`PAPER_RADAR_REPORTS_DIR`、`PAPER_RADAR_EXPORTS_DIR`、`PAPER_RADAR_LOGS_DIR`、`PAPER_RADAR_DATABASE_PATH`。
+  - `config/app.yaml` 中保留 `obsidian` 配置脚手架，但默认 `enabled: false`，当前不写入 Obsidian vault，也不实现 Obsidian 插件。
+
+- 已实现：
+  - `config/app.yaml`
+  - `src/app/__init__.py`
+  - `src/app/config.py`
+  - `src/app/runtime.py`
+  - `tests/test_runtime_config.py`
+  - `docs/specs/v0.6.5-runtime-config.md`
+  - `docs/plans/v0.6.5-runtime-config.md`
+  - 主流程、诊断和周报命令的 runtime config 接入。
+  - README、架构文档、测试文档和仓库规则已同步 V0.6.5 当前事实。
+
+- 已拒绝的替代方案：
+  - 拒绝实现 Obsidian 插件或硬编码 Obsidian vault 路径。
+  - 拒绝新增 source、评分、LLM 排名、LLM 摘要、PDF 下载、Zotero / Anki / Telegram / Email 集成。
+  - 拒绝大规模重写 source clients；source clients 继续只接收调用方传入的 `raw_dir`。
+
+- 接受的风险或债务：
+  - `obsidian` 配置段当前只是未来兼容脚手架，实际导出器和 vault 写入策略仍需后续设计。
+  - 当前没有新增 dry-run/source preview 命令。
+  - pytest 在当前 Windows/OneDrive 沙箱中仍会报告 `.pytest_cache` 写入权限警告；测试本身通过。
+
+- 验证：
+  - 默认 `uv run --extra dev pytest -q tests/test_runtime_config.py tests/test_weekly_candidates.py tests/test_diagnostics.py tests/test_main_pipeline.py` 仍遇到 uv 全局 cache 权限问题。
+  - `uv --cache-dir .uv-cache run --extra dev pytest -q tests/test_runtime_config.py tests/test_weekly_candidates.py tests/test_diagnostics.py tests/test_main_pipeline.py` 通过，结果为 10 passed。
+  - `uv --cache-dir .uv-cache run --extra dev pytest -q` 通过，结果为 31 passed。
+
+### 决策
+
 落地 V0.6 的最小有用版本，并同步保留文档。
 
 - 为什么：
