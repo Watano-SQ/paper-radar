@@ -6,6 +6,49 @@
 
 ### 决策
 
+落地 V0.7.3 topics 与 scoring 校准，基于 2026-W21 真实周运行产物收窄默认抓取种子并提高 S 级门槛。
+
+- 为什么：
+  - 当前 `max_queries_per_lane: 1` 意味着每个 lane 默认只使用第一个 keyword。
+  - 2026-W21 真实运行显示 `embodied intelligence`、`dynamical systems`、`semiotics` 等首位 keyword 过宽，吸入 OpenAlex / Zenodo 重复、期刊介绍、文化/法律/文学噪声和部分低相关数学/物理条目。
+  - score audit 显示 80 个候选中 74 个为 `S_candidate`，S 级区分度不足。
+  - `metadata.has_abstract` 加分偏高，`missing_abstract_penalty` 偏轻。
+- 决定：
+  - `config/topics.yaml` 只调整关键词排序/首位种子，不启用新 source。
+  - `core_embodied_ai` 首位改为 `robot manipulation`，保留 `embodied intelligence` 但下移。
+  - `math_physics_cs` 首位改为 `nonlinear control`，保留 `dynamical systems` 但下移。
+  - `neuro_cognitive` 首位改为 `predictive coding neuroscience`。
+  - `language_symbol` 首位改为 `symbol grounding`，保留 `semiotics` 但下移。
+  - `humanities_social` 首位改为 `cognitive science philosophy`。
+  - `config/scoring.yaml` 中 `s_candidate_min` 从 18 提高到 22。
+  - `metadata.has_abstract` 从 8 降到 6。
+  - `missing_abstract_penalty` 从 -3 调到 -6。
+- 已实现：
+  - `config/topics.yaml`
+  - `config/scoring.yaml`
+  - `docs/specs/v0.7.3-topics-scoring-calibration.md`
+  - `docs/plans/v0.7.3-topics-scoring-calibration.md`
+  - V0.7.2 活跃 spec/plan 已归档到 `docs/archive/specs/` 和 `docs/archive/plans/`。
+- 已拒绝的替代方案：
+  - 拒绝修改代码。
+  - 拒绝启用 PubMed、bioRxiv、medRxiv、Crossref 或 Semantic Scholar。
+  - 拒绝修改 `config/sources.yaml`。
+  - 拒绝 PDF 下载、LLM ranking、LLM 摘要、Zotero、Obsidian、Anki、Telegram / Email、vector database。
+  - 拒绝删除或重建运行产物。
+- 接受的风险或债务：
+  - 这是一次配置校准，实际质量仍需下一次真实周运行验证。
+  - 更窄首位 keyword 可能降低召回率，但预期会减少 OpenAlex/Zenodo 噪声。
+- 取代关系：
+  - `docs/specs/v0.7.3-topics-scoring-calibration.md` 取代 `docs/archive/specs/v0.7.2-source-preview-empty-export-stabilization.md` 作为当前活跃设计说明。
+  - `docs/plans/v0.7.3-topics-scoring-calibration.md` 取代 `docs/archive/plans/v0.7.2-source-preview-empty-export-stabilization.md` 作为当前活跃执行计划。
+- 验证：
+  - `C:\Users\SeinoQ\.local\bin\uv.exe --cache-dir .uv-cache run python -m src.main --source-preview` 通过。
+  - `C:\Users\SeinoQ\.local\bin\uv.exe --cache-dir .uv-cache run --extra dev pytest -q --basetemp "$env:TEMP\paper-radar-pytest-codex"` 通过，结果为 47 passed。
+
+## 2026-05-23
+
+### 决策
+
 落地 V0.7.2 source preview 与 empty export 稳定化步骤。
 
 - 为什么：

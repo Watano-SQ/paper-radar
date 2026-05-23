@@ -2,11 +2,11 @@
 
 Paper Radar is a compliant cross-disciplinary academic metadata radar for personal use.
 
-The current version is V0.7.2. It collects recent academic metadata from official APIs and public APIs, normalizes records into one `PaperItem` model, stores them in SQLite, exports a JSONL candidate pool, and can generate a lightweight weekly Markdown candidate report with transparent rule-based candidate scoring, lane balance, and an optional reject/downrank log. V0.7.2 adds an offline source preview and protects the current candidate export from being overwritten by empty runs unless explicitly allowed.
+The current version is V0.7.3. It collects recent academic metadata from official APIs and public APIs, normalizes records into one `PaperItem` model, stores them in SQLite, exports a JSONL candidate pool, and can generate a lightweight weekly Markdown candidate report with transparent rule-based candidate scoring, lane balance, and an optional reject/downrank log. V0.7.3 calibrates default topic seeds and scoring thresholds after the 2026-W21 real weekly run.
 
 It is not a general-purpose crawler, not a Google Scholar scraper, not a PDF downloader, and not a Zotero replacement.
 
-## V0.7.2 Capabilities
+## V0.7.3 Capabilities
 
 - Unified `PaperItem` model.
 - DOI, arXiv ID, title, and PMID-aware canonical ID generation.
@@ -28,9 +28,11 @@ It is not a general-purpose crawler, not a Google Scholar scraper, not a PDF dow
 - Score-audit Markdown report for inspecting scoring calibration.
 - Offline source preview for enabled/disabled sources, planned query labels, limits, and estimated max records.
 - Empty-export protection in the main pipeline, with an explicit `--allow-empty-export` override.
+- Calibrated first keywords in `config/topics.yaml` so default source preview and crawling use narrower lane seeds.
+- Calibrated `config/scoring.yaml` to make `S_candidate` harder to reach and missing abstracts more costly.
 - Pytest coverage for normalization, storage, enrichment, deduplication, diagnostics, PubMed, bioRxiv/medRxiv, source preview, empty-export protection, and report generation.
 
-## What V0.7.2 Does Not Do
+## What V0.7.3 Does Not Do
 
 - It does not scrape Google Scholar.
 - It does not scrape publisher HTML pages.

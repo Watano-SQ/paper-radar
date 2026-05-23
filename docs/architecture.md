@@ -108,6 +108,7 @@ V0.6.5 引入 `RuntimeConfig` 和 `AppPaths`，把路径解析集中在 `src.app
 ## 规则评分与候选级别
 
 V0.7 引入轻量、透明、可配置的 report-stage 规则评分层。评分只读取 JSONL 候选项中已有字段，不访问外部 API，不改变 SQLite schema，也不改变 JSONL export 格式。
+V0.7.3 根据 2026-W21 真实周运行校准默认 topics 和 scoring：每个 lane 的首位 keyword 更窄，`S_candidate` 阈值提高，摘要存在本身的加分降低，缺失摘要惩罚加重。
 
 评分结果包含：
 

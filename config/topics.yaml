@@ -1,10 +1,10 @@
 lanes:
   core_embodied_ai:
     keywords:
+      - robot manipulation
       - embodied intelligence
       - embodied AI
       - robot learning
-      - robotic manipulation
       - reinforcement learning robotics
       - world model robotics
       - visuomotor policy
@@ -17,8 +17,9 @@ lanes:
 
   math_physics_cs:
     keywords:
-      - dynamical systems
+      - nonlinear control
       - control theory
+      - dynamical systems
       - information theory
       - category theory
       - complexity theory
@@ -33,10 +34,10 @@ lanes:
 
   neuro_cognitive:
     keywords:
+      - predictive coding neuroscience
       - computational neuroscience
       - cognitive neuroscience
       - neural coding
-      - predictive coding
       - brain computer interface
       - hippocampus memory
     arxiv_categories:
@@ -45,8 +46,8 @@ lanes:
 
   language_symbol:
     keywords:
-      - semiotics
       - symbol grounding
+      - semiotics
       - cognitive linguistics
       - language evolution
       - syntax semantics
@@ -56,6 +57,7 @@ lanes:
 
   humanities_social:
     keywords:
+      - cognitive science philosophy
       - philosophy of mind
       - political order
       - institutional economics

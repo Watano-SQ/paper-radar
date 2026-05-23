@@ -12,6 +12,7 @@
 - V0.7 起，周候选池报告默认使用 `config/scoring.yaml` 做透明规则评分和 lane balance。
 - V0.7.1 起，可通过 score audit 报告检查真实候选池上的评分校准表现。
 - V0.7.2 起，可先运行 source preview 检查启用/禁用来源、计划查询和限额；主流程默认不会用空结果覆盖当前候选导出。
+- V0.7.3 起，默认首位 topic keyword 和 scoring 阈值已根据 2026-W21 真实运行结果收窄；运行真实抓取前建议先查看 source preview。
 
 ## 环境准备
 
