@@ -121,10 +121,11 @@ def test_run_pipeline_uses_configured_temp_runtime_paths(tmp_path: Path) -> None
     )
     runtime = load_runtime_config(project_root=tmp_path, config_dir=config_dir, environ={})
 
-    output_path = run_pipeline(runtime)
+    result = run_pipeline(runtime)
 
-    assert output_path.parent == tmp_path / "runtime-exports"
-    assert output_path.exists()
+    assert result.export_path.parent == tmp_path / "runtime-exports"
+    assert result.empty_export_skipped is True
+    assert not result.export_path.exists()
     assert runtime.paths.database_path.exists()
     assert runtime.paths.logs_dir.exists()
     assert not (tmp_path / "data").exists()

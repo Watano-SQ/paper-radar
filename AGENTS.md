@@ -9,13 +9,14 @@ Paper Radar 是一个合规的跨学科学术材料元数据抓取项目。仓�
 1. 通过 `config/topics.yaml` 定义兴趣 lane 和关键词/分类。
 2. 通过 `config/sources.yaml` 控制各来源是否启用、请求限额、延迟和 API key 环境变量名。
 3. 通过 `config/app.yaml` 控制本地运行路径、导出文件名模板和报告文件名模板。
-4. 运行 `src.main` 后，启用的发现源抓取元数据并规范化为 `PaperItem`。
-5. 元数据默认写入 `data/papers.sqlite`，原始响应默认写入 `data/raw/`，抓取状态写入 `crawl_runs`；这些路径由 runtime config 解析。
-6. 可选 enrichment 源在已有条目基础上补全元数据。
-7. 运行弱去重后默认导出 `data/exports/candidates_<YYYY-WW>.jsonl`。
-8. weekly report 从 JSONL 候选池读取数据，按 `config/scoring.yaml` 做透明规则评分和 lane balance，生成候选池报告；可选生成 reject/downrank log。
-9. score audit 从 JSONL 候选池读取数据，复用 scoring 和 lane balance，生成校准诊断报告。
-10. 可通过 diagnostics 工具检查本地状态。
+4. 可通过 `src.main --source-preview` 或 `--dry-run` 离线检查启用/禁用来源、计划查询、限额和估算最大记录数。
+5. 运行 `src.main` 后，启用的发现源抓取元数据并规范化为 `PaperItem`。
+6. 元数据默认写入 `data/papers.sqlite`，原始响应默认写入 `data/raw/`，抓取状态写入 `crawl_runs`；这些路径由 runtime config 解析。
+7. 可选 enrichment 源在已有条目基础上补全元数据。
+8. 运行弱去重后默认导出 `data/exports/candidates_<YYYY-WW>.jsonl`；如果本次未收集任何候选，默认跳过导出以避免覆盖当前候选池，除非显式使用 `--allow-empty-export`。
+9. weekly report 从 JSONL 候选池读取数据，按 `config/scoring.yaml` 做透明规则评分和 lane balance，生成候选池报告；可选生成 reject/downrank log。
+10. score audit 从 JSONL 候选池读取数据，复用 scoring 和 lane balance，生成校准诊断报告。
+11. 可通过 diagnostics 工具检查本地状态。
 
 当前已经实现：
 
@@ -26,7 +27,7 @@ Paper Radar 是一个合规的跨学科学术材料元数据抓取项目。仓�
 - SQLite 存储层，包含 `papers`、`paper_sources`、`crawl_runs`、`possible_duplicates`；
 - 中央 runtime 配置层，包含 `AppPaths`、`RuntimeConfig` 和 `config/app.yaml`；
 - 透明规则评分、lane balance、reject/downrank log；
-- 原始响应保存、JSONL 导出、弱去重、诊断命令、周候选池 Markdown 报告、score audit Markdown 报告；
+- 原始响应保存、JSONL 导出、空导出保护、source preview、弱去重、诊断命令、周候选池 Markdown 报告、score audit Markdown 报告；
 - pytest 测试入口。
 
 当前不能声称已经实现：
@@ -77,11 +78,11 @@ Paper Radar 是一个合规的跨学科学术材料元数据抓取项目。仓�
 
 当前活跃设计说明：
 
-- `docs/specs/v0.7.1-score-audit-calibration.md`
+- `docs/specs/v0.7.2-source-preview-empty-export-stabilization.md`
 
 当前活跃执行计划：
 
-- `docs/plans/v0.7.1-score-audit-calibration.md`
+- `docs/plans/v0.7.2-source-preview-empty-export-stabilization.md`
 
 关键源码入口：
 

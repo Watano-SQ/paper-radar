@@ -15,16 +15,17 @@ Paper Radar 用于合规地收集跨学科学术材料元数据，把不同官�
 3. `config/app.yaml` 定义默认本地运行路径、导出文件名模板和报告文件名模板。
 4. `config/scoring.yaml` 定义周候选池报告的规则评分、阈值、lane balance 和 reject log 行为。
 5. `src.app.config` 加载 runtime config，解析 `AppPaths`；相对路径默认按项目根目录解析，绝对路径保持不变。
-6. `src/main.py` 创建 `PaperStore`，按来源构造查询。
-7. 已启用的来源客户端抓取原始数据，并默认保存原始响应到 `data/raw/<source>/<YYYY-WW>/`；raw 目录可通过 runtime config 改变。
-8. 来源客户端将原始记录规范化为 `PaperItem`。
-9. `PaperStore` 将条目 upsert 到 SQLite，并记录来源、查询、抓取状态。
-10. Crossref 和 Semantic Scholar 可作为 enrichment 源处理已有条目，不作为默认发现源。
-11. `src.pipeline.dedup` 对当前收集条目和历史库做弱去重，疑似重复写入 `possible_duplicates`。
-12. `src.pipeline.export` 默认导出 `data/exports/candidates_<YYYY-WW>.jsonl`，目录和文件名模板可通过 runtime config 改变。
-13. `src.report.weekly_candidates` 从 JSONL 导出生成周候选池 Markdown 报告，默认使用 V0.7 规则评分、lane balance 和可选 reject/downrank log。
-14. `src.report.score_audit` 从 JSONL 导出生成评分校准报告，复用同一 scoring 和 lane balance 逻辑，不修改 JSONL 或 SQLite。
-15. `src.diagnostics` 可读取 SQLite 和 exports 状态。
+6. `src/main.py` 可先用 source preview 离线展示启用/禁用来源、计划查询、限额和估算最大记录数；该路径不访问网络也不写入抓取产物。
+7. `src/main.py` 创建 `PaperStore`，按来源构造查询。
+8. 已启用的来源客户端抓取原始数据，并默认保存原始响应到 `data/raw/<source>/<YYYY-WW>/`；raw 目录可通过 runtime config 改变。
+9. 来源客户端将原始记录规范化为 `PaperItem`。
+10. `PaperStore` 将条目 upsert 到 SQLite，并记录来源、查询、抓取状态。
+11. Crossref 和 Semantic Scholar 可作为 enrichment 源处理已有条目，不作为默认发现源。
+12. `src.pipeline.dedup` 对当前收集条目和历史库做弱去重，疑似重复写入 `possible_duplicates`。
+13. `src.pipeline.export` 默认导出 `data/exports/candidates_<YYYY-WW>.jsonl`，目录和文件名模板可通过 runtime config 改变；如果本次收集为空，V0.7.2 起默认跳过导出以避免覆盖当前候选池，除非显式允许空导出。
+14. `src.report.weekly_candidates` 从 JSONL 导出生成周候选池 Markdown 报告，默认使用 V0.7 规则评分、lane balance 和可选 reject/downrank log。
+15. `src.report.score_audit` 从 JSONL 导出生成评分校准报告，复用同一 scoring 和 lane balance 逻辑，不修改 JSONL 或 SQLite。
+16. `src.diagnostics` 可读取 SQLite 和 exports 状态。
 
 ## 主要模块与职责
 
@@ -33,7 +34,7 @@ Paper Radar 用于合规地收集跨学科学术材料元数据，把不同官�
 - `config/scoring.yaml`：维护周候选池报告的规则评分权重、候选级别阈值、lane balance、reject 行为和报告细节设置。
 - `src/app/config.py`：加载 `config/app.yaml`、`config/sources.yaml`、`config/topics.yaml`、`config/scoring.yaml`，解析 `AppPaths` 和 `RuntimeConfig`。
 - `src/app/runtime.py`：根据 runtime 文件名模板构造候选导出路径和周报路径。
-- `src/main.py`：主编排入口，负责运行来源、运行 enrichment、去重和导出；`run_pipeline(runtime)` 可由 CLI 以外的代码调用。
+- `src/main.py`：主编排入口，负责离线 source preview、运行来源、运行 enrichment、去重和导出；`run_pipeline(runtime)` 可由 CLI 以外的代码调用，并返回 `PipelineResult`。
 - `src/models/paper.py`：统一论文元数据模型 `PaperItem`。
 - `src/sources/`：外部来源客户端。当前包含 OpenAlex、arXiv、PubMed、bioRxiv、medRxiv、Crossref、Semantic Scholar。
 - `src/pipeline/normalize.py`：规范化和最终化 `PaperItem`。
@@ -63,7 +64,7 @@ config/app.yaml + config/topics.yaml + config/sources.yaml + config/scoring.yaml
   -> PaperStore upserts SQLite rows
   -> enrichment clients optionally update existing items
   -> weak dedup records possible_duplicates
-  -> export_jsonl writes runtime-configured JSONL candidate export
+  -> export_jsonl writes runtime-configured JSONL candidate export when collected_ids is non-empty or empty export is explicitly allowed
   -> report scores and balances exported candidates at report time
   -> optional reject/downrank log is written under runtime reports dir
   -> optional score audit reports scoring behavior under runtime reports dir

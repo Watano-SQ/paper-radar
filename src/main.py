@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 from collections.abc import Iterable
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -22,15 +22,67 @@ from src.sources.pubmed import PubMedClient
 from src.sources.semantic_scholar import SemanticScholarClient
 
 
+DISCOVERY_CLIENTS: dict[str, Any] = {
+    "openalex": OpenAlexClient,
+    "arxiv": ArxivClient,
+    "pubmed": PubMedClient,
+    "biorxiv": BiorxivClient,
+    "medrxiv": MedrxivClient,
+}
+
+ENRICHMENT_CLIENTS: dict[str, Any] = {
+    "crossref": CrossrefClient,
+    "semantic_scholar": SemanticScholarClient,
+}
+
+
+@dataclass(frozen=True)
+class PipelineResult:
+    export_path: Path
+    exported_count: int
+    collected_count: int
+    empty_export_skipped: bool = False
+
+
+@dataclass(frozen=True)
+class SourcePreview:
+    name: str
+    source_type: str
+    enabled: bool
+    max_total: int | None
+    per_query_limit: int | None
+    days_back: int | None
+    planned_queries: tuple[SourceQuery, ...]
+    estimated_max_records: int
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Run the Paper Radar metadata pipeline.")
     parser.add_argument("--config-dir", type=Path, default=None)
+    parser.add_argument(
+        "--source-preview",
+        action="store_true",
+        help="Show configured sources and planned queries without accessing the network.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Alias for --source-preview.",
+    )
+    parser.add_argument(
+        "--allow-empty-export",
+        action="store_true",
+        help="Write an empty candidate export when no records are collected.",
+    )
     args = parser.parse_args(argv)
     runtime = load_runtime_config(config_dir=args.config_dir)
-    run_pipeline(runtime)
+    if args.source_preview or args.dry_run:
+        print(render_source_preview(build_source_preview(runtime)), end="")
+        return
+    run_pipeline(runtime, allow_empty_export=args.allow_empty_export)
 
 
-def run_pipeline(runtime: RuntimeConfig) -> Path:
+def run_pipeline(runtime: RuntimeConfig, *, allow_empty_export: bool = False) -> PipelineResult:
     logger = setup_logging(runtime.paths.logs_dir)
     sources_config = runtime.sources
     topics_config = runtime.topics
@@ -38,13 +90,7 @@ def run_pipeline(runtime: RuntimeConfig) -> Path:
     collected_ids: set[str] = set()
 
     try:
-        for source_name, client_cls in {
-            "openalex": OpenAlexClient,
-            "arxiv": ArxivClient,
-            "pubmed": PubMedClient,
-            "biorxiv": BiorxivClient,
-            "medrxiv": MedrxivClient,
-        }.items():
+        for source_name, client_cls in DISCOVERY_CLIENTS.items():
             config = sources_config.get(source_name, {})
             if not config.get("enabled", False):
                 logger.info("source=%s skipped because it is disabled", source_name)
@@ -77,11 +123,149 @@ def run_pipeline(runtime: RuntimeConfig) -> Path:
         detect_and_store_duplicates(store, collected_ids, logger)
 
         output_path = candidate_export_path(runtime)
+        if not collected_ids and not allow_empty_export:
+            logger.warning(
+                "no candidate records collected; skipping export to avoid overwriting %s. "
+                "Use --allow-empty-export to write an empty candidate export.",
+                output_path,
+            )
+            return PipelineResult(
+                export_path=output_path,
+                exported_count=0,
+                collected_count=0,
+                empty_export_skipped=True,
+            )
         exported = export_jsonl(store.fetch_paper_items(collected_ids), output_path)
         logger.info("exported=%s path=%s", exported, output_path)
-        return output_path
+        return PipelineResult(
+            export_path=output_path,
+            exported_count=exported,
+            collected_count=len(collected_ids),
+        )
     finally:
         store.close()
+
+
+def build_source_preview(runtime: RuntimeConfig) -> list[SourcePreview]:
+    previews: list[SourcePreview] = []
+    for source_name, config in runtime.sources.items():
+        enabled = bool(config.get("enabled", False))
+        source_type = _source_type(source_name)
+        max_total = _optional_int(config.get("max_total"))
+        per_query_limit = _optional_int(config.get("per_query_limit"))
+        days_back = _optional_int(config.get("days_back"))
+        planned_queries: tuple[SourceQuery, ...] = ()
+        estimated_max_records = 0
+
+        if enabled and source_name in DISCOVERY_CLIENTS:
+            planned_queries = tuple(build_planned_queries(source_name, config, runtime.topics))
+            estimated_max_records = sum(int(query.limit or 0) for query in planned_queries)
+        elif enabled and source_name in ENRICHMENT_CLIENTS:
+            estimated_max_records = max_total or 0
+
+        previews.append(
+            SourcePreview(
+                name=source_name,
+                source_type=source_type,
+                enabled=enabled,
+                max_total=max_total,
+                per_query_limit=per_query_limit,
+                days_back=days_back,
+                planned_queries=planned_queries,
+                estimated_max_records=estimated_max_records,
+            )
+        )
+    return previews
+
+
+def build_planned_queries(
+    source_name: str,
+    config: dict[str, Any],
+    lanes: dict[str, Any],
+) -> list[SourceQuery]:
+    max_total = int(config.get("max_total", 50))
+    total_planned = 0
+    planned: list[SourceQuery] = []
+    for query in build_queries(source_name, config, lanes):
+        if total_planned >= max_total:
+            break
+        remaining = max_total - total_planned
+        limit = min(int(query.limit or remaining), remaining)
+        planned_query = replace(query, limit=limit)
+        planned.append(planned_query)
+        total_planned += limit
+    return planned
+
+
+def render_source_preview(previews: Iterable[SourcePreview]) -> str:
+    enabled = [preview for preview in previews if preview.enabled]
+    disabled = [preview for preview in previews if not preview.enabled]
+    lines = [
+        "# Source Preview",
+        "",
+        "Network access: disabled",
+        "",
+        "Enabled sources:",
+    ]
+    if enabled:
+        for preview in enabled:
+            lines.extend(_render_preview_source(preview))
+    else:
+        lines.append("- none")
+
+    lines.extend(["", "Disabled sources:"])
+    if disabled:
+        for preview in disabled:
+            lines.append(
+                f"- {preview.name} ({preview.source_type}): "
+                f"max_total={_display_limit(preview.max_total)} "
+                f"per_query_limit={_display_limit(preview.per_query_limit)} "
+                f"days_back={_display_limit(preview.days_back)} "
+                f"estimated_max_records={preview.estimated_max_records}"
+            )
+    else:
+        lines.append("- none")
+    return "\n".join(lines) + "\n"
+
+
+def _render_preview_source(preview: SourcePreview) -> list[str]:
+    details = [
+        f"- {preview.name} ({preview.source_type}):",
+        f"  max_total={_display_limit(preview.max_total)}",
+        f"  per_query_limit={_display_limit(preview.per_query_limit)}",
+        f"  days_back={_display_limit(preview.days_back)}",
+        f"  estimated_max_records={preview.estimated_max_records}",
+    ]
+    if preview.planned_queries:
+        details.append("  planned_queries:")
+        details.extend(
+            f"    - {query.label} limit={_display_limit(query.limit)}" for query in preview.planned_queries
+        )
+    elif preview.source_type == "enrichment":
+        details.append("  planned_queries: enrichment depends on collected candidates")
+    else:
+        details.append("  planned_queries: none")
+    return details
+
+
+def _source_type(source_name: str) -> str:
+    if source_name in DISCOVERY_CLIENTS:
+        return "discovery"
+    if source_name in ENRICHMENT_CLIENTS:
+        return "enrichment"
+    return "config-only"
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    return int(value)
+
+
+def _display_limit(value: int | None) -> str:
+    if value is None:
+        return "unset"
+    return str(value)
 
 
 def run_source(

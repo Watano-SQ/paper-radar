@@ -2,11 +2,11 @@
 
 Paper Radar is a compliant cross-disciplinary academic metadata radar for personal use.
 
-The current version is V0.7.1. It collects recent academic metadata from official APIs and public APIs, normalizes records into one `PaperItem` model, stores them in SQLite, exports a JSONL candidate pool, and can generate a lightweight weekly Markdown candidate report with transparent rule-based candidate scoring, lane balance, and an optional reject/downrank log. V0.7.1 adds a score-audit report for calibration after real weekly trial runs.
+The current version is V0.7.2. It collects recent academic metadata from official APIs and public APIs, normalizes records into one `PaperItem` model, stores them in SQLite, exports a JSONL candidate pool, and can generate a lightweight weekly Markdown candidate report with transparent rule-based candidate scoring, lane balance, and an optional reject/downrank log. V0.7.2 adds an offline source preview and protects the current candidate export from being overwritten by empty runs unless explicitly allowed.
 
 It is not a general-purpose crawler, not a Google Scholar scraper, not a PDF downloader, and not a Zotero replacement.
 
-## V0.7.1 Capabilities
+## V0.7.2 Capabilities
 
 - Unified `PaperItem` model.
 - DOI, arXiv ID, title, and PMID-aware canonical ID generation.
@@ -26,9 +26,11 @@ It is not a general-purpose crawler, not a Google Scholar scraper, not a PDF dow
 - Configurable lane balance for weekly candidate reports.
 - Optional reject/downrank log for debugging report filtering decisions.
 - Score-audit Markdown report for inspecting scoring calibration.
-- Pytest coverage for normalization, storage, enrichment, deduplication, diagnostics, PubMed, bioRxiv/medRxiv, and report generation.
+- Offline source preview for enabled/disabled sources, planned query labels, limits, and estimated max records.
+- Empty-export protection in the main pipeline, with an explicit `--allow-empty-export` override.
+- Pytest coverage for normalization, storage, enrichment, deduplication, diagnostics, PubMed, bioRxiv/medRxiv, source preview, empty-export protection, and report generation.
 
-## What V0.7.1 Does Not Do
+## What V0.7.2 Does Not Do
 
 - It does not scrape Google Scholar.
 - It does not scrape publisher HTML pages.
@@ -184,6 +186,14 @@ Run the metadata pipeline:
 uv run python -m src.main
 ```
 
+Preview configured sources and planned queries without network access:
+
+```bash
+uv run python -m src.main --source-preview
+```
+
+`--dry-run` is an alias for the same source preview. If a normal pipeline run collects no records, it logs a warning and skips writing the current candidate export by default. Use `--allow-empty-export` only when an empty JSONL export is intentional.
+
 Or with an explicit config directory:
 
 ```bash
@@ -336,7 +346,6 @@ Good next candidates:
 
 1. Run a real weekly trial and manually calibrate `config/topics.yaml` and `config/scoring.yaml`.
 2. Improve source-specific field coverage and diagnostics.
-3. Add a dry-run or source preview command.
-4. Later, consider selected-item local organization or safe OA PDF download as a separate V0.8 task.
+3. Later, consider selected-item local organization or safe OA PDF download as a separate V0.8 task.
 
 Keep the boundary clear: collect clean metadata first, then build recommendation and reading workflows on top.

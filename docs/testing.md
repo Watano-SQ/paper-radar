@@ -11,6 +11,7 @@
 - V0.6.5 起，默认运行路径由 `config/app.yaml` 和 runtime 环境变量解析；默认本地路径保持不变。
 - V0.7 起，周候选池报告默认使用 `config/scoring.yaml` 做透明规则评分和 lane balance。
 - V0.7.1 起，可通过 score audit 报告检查真实候选池上的评分校准表现。
+- V0.7.2 起，可先运行 source preview 检查启用/禁用来源、计划查询和限额；主流程默认不会用空结果覆盖当前候选导出。
 
 ## 环境准备
 
@@ -52,7 +53,25 @@ uv run --extra dev pytest -q tests/test_scoring.py tests/test_weekly_candidates.
 uv run --extra dev pytest -q tests/test_score_audit.py tests/test_scoring.py tests/test_weekly_candidates.py
 ```
 
+运行 source preview / empty export 相关测试：
+
+```bash
+uv run --extra dev pytest -q tests/test_main_pipeline.py tests/test_runtime_config.py
+```
+
 ## 本地抓取
+
+预览来源配置和计划查询，不访问网络、不写入抓取产物：
+
+```bash
+uv run python -m src.main --source-preview
+```
+
+`--dry-run` 是同一预览路径的别名：
+
+```bash
+uv run python -m src.main --dry-run
+```
 
 运行主流程：
 
@@ -66,6 +85,12 @@ uv run python -m src.main
 - `data/raw/`
 - `data/exports/`
 - `logs/`
+
+如果本次运行没有收集到任何候选，V0.7.2 起默认会跳过当前 candidate export 写入，避免覆盖已有导出。只有明确需要空 JSONL 文件时才使用：
+
+```bash
+uv run python -m src.main --allow-empty-export
+```
 
 可显式指定配置目录：
 

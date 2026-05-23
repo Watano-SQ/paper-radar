@@ -2,6 +2,47 @@
 
 > 本文档按照日期倒序记录，也即最新日期在前。
 
+## 2026-05-23
+
+### 决策
+
+落地 V0.7.2 source preview 与 empty export 稳定化步骤。
+
+- 为什么：
+  - 真实周运行前需要先检查 `config/sources.yaml` 和 `config/topics.yaml` 会触发哪些来源与查询，而不访问网络、不写入抓取产物。
+  - 之前当所有来源禁用、来源失败或没有收集到候选时，主流程仍可能创建或覆盖当前候选 JSONL；这会让后续 weekly report / score audit 误读空候选池。
+  - 当前阶段需要收紧运行安全性，而不是扩展新来源或下游工作流。
+- 决定：
+  - 在 `src.main` 中新增 `--source-preview`，输出启用来源、禁用来源、source type、计划 `SourceQuery` label、每来源限额和估算最大记录数。
+  - `--dry-run` 作为 `--source-preview` 的别名；该路径只读取 runtime config，不实例化来源客户端，不访问网络，不写入 SQLite、raw response 或 candidate export。
+  - `run_pipeline()` 返回 `PipelineResult`，包含 export path、exported count、collected count 和 empty-export skipped 状态。
+  - `run_pipeline()` 默认在 `collected_ids` 为空时跳过 candidate export 写入，记录 warning，避免覆盖当前候选池。
+  - 新增 `--allow-empty-export`，仅在明确需要空 JSONL 文件时保留旧行为。
+- 已实现：
+  - `src/main.py` 中的 `PipelineResult`、`SourcePreview`、source preview 构建/渲染逻辑。
+  - CLI `--source-preview`、`--dry-run`、`--allow-empty-export`。
+  - `tests/test_main_pipeline.py` 覆盖 source preview、默认空导出保护和显式空导出。
+  - `tests/test_runtime_config.py` 已同步新的 `PipelineResult` 和默认空导出行为。
+  - `docs/specs/v0.7.2-source-preview-empty-export-stabilization.md`
+  - `docs/plans/v0.7.2-source-preview-empty-export-stabilization.md`
+  - V0.7.1 活跃 spec/plan 已归档到 `docs/archive/specs/` 和 `docs/archive/plans/`。
+- 已拒绝的替代方案：
+  - 拒绝新增 OpenReview / CORE / IEEE 客户端。
+  - 拒绝 PDF 下载、LLM ranking、LLM 摘要、Zotero、Obsidian、Anki、Telegram / Email、vector database。
+  - 拒绝 Google Scholar 或 publisher HTML scraping。
+  - 拒绝修改 SQLite schema 或 JSONL export 格式。
+- 接受的风险或债务：
+  - source preview 是静态上限估算，不保证真实 API 返回数量。
+  - enrichment 来源只能显示配置上限；真实 enrichment 数量取决于本次已收集候选。
+  - pytest 在当前 Windows/OneDrive 沙箱中仍可能报告 `.pytest_cache` 写入权限警告；测试本身通过。
+- 取代关系：
+  - `docs/specs/v0.7.2-source-preview-empty-export-stabilization.md` 取代 `docs/archive/specs/v0.7.1-score-audit-calibration.md` 作为当前活跃设计说明。
+  - `docs/plans/v0.7.2-source-preview-empty-export-stabilization.md` 取代 `docs/archive/plans/v0.7.1-score-audit-calibration.md` 作为当前活跃执行计划。
+- 验证：
+  - `uv --cache-dir .uv-cache run python -m src.main --source-preview` 通过，确认只输出离线 preview。
+  - `uv --cache-dir .uv-cache run --extra dev pytest -q tests/test_main_pipeline.py tests/test_runtime_config.py` 通过，结果为 11 passed。
+  - `uv --cache-dir .uv-cache run --extra dev pytest -q` 通过，结果为 47 passed。
+
 ## 2026-05-19
 
 ### 决策
