@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 from typing import Any
 
 from src.ranking.config import scoring_section
-from src.ranking.scoring import ScoredCandidate
+from src.ranking.scoring import ScoredCandidate, is_repository_like_candidate, normalize_title_for_dedupe
 from src.utils.dates import to_iso_date
 
 
@@ -51,6 +52,9 @@ def select_balanced_candidates(
     if reject_config.get("hard_reject_duplicate_canonical_id", True):
         eligible, duplicate_rejects = _dedupe_by_canonical_id(eligible)
         rejected.extend(duplicate_rejects)
+
+    eligible, duplicate_downranks = _suppress_near_duplicate_titles(eligible, config)
+    downranked.extend(duplicate_downranks)
 
     by_lane: dict[str, list[ScoredCandidate]] = {}
     for scored in eligible:
@@ -118,6 +122,65 @@ def _dedupe_by_canonical_id(
         for duplicate in ranked[1:]:
             rejected.append(CandidateDecision(duplicate, "Duplicate canonical ID"))
     return kept, rejected
+
+
+def _suppress_near_duplicate_titles(
+    candidates: list[ScoredCandidate],
+    config: dict[str, Any],
+) -> tuple[list[ScoredCandidate], list[CandidateDecision]]:
+    groups: list[list[ScoredCandidate]] = []
+    no_title: list[ScoredCandidate] = []
+    for scored in candidates:
+        normalized_title = normalize_title_for_dedupe(scored.candidate.get("title"))
+        if not normalized_title:
+            no_title.append(scored)
+            continue
+        for group in groups:
+            group_title = normalize_title_for_dedupe(group[0].candidate.get("title"))
+            if _near_duplicate_title(normalized_title, group_title):
+                group.append(scored)
+                break
+        else:
+            groups.append([scored])
+
+    kept: list[ScoredCandidate] = [*no_title]
+    downranked: list[CandidateDecision] = []
+    for group in groups:
+        if len(group) == 1:
+            kept.append(group[0])
+            continue
+        keep = _best_title_duplicate(group, config)
+        kept.append(keep)
+        for duplicate in group:
+            if duplicate is not keep:
+                downranked.append(CandidateDecision(duplicate, "Near-duplicate title"))
+    return kept, downranked
+
+
+def _near_duplicate_title(left: str, right: str) -> bool:
+    if not left or not right:
+        return False
+    if left == right:
+        return True
+    return SequenceMatcher(a=left, b=right).ratio() >= 0.96
+
+
+def _best_title_duplicate(group: list[ScoredCandidate], config: dict[str, Any]) -> ScoredCandidate:
+    highest_score = max(item.score.total for item in group)
+    close_candidates = [item for item in group if highest_score - item.score.total <= 1.0]
+    return max(close_candidates, key=lambda item: (_source_preference(item, config), *_sort_key(item)))
+
+
+def _source_preference(scored: ScoredCandidate, config: dict[str, Any]) -> int:
+    source = str(scored.candidate.get("source") or "").casefold()
+    signals = config.get("signals", {})
+    if source == "arxiv":
+        return 3
+    if source == "openalex" and not is_repository_like_candidate(scored.candidate, signals):
+        return 2
+    if source == "openalex":
+        return 1
+    return 0
 
 
 def _reject_reason(scored: ScoredCandidate) -> str:

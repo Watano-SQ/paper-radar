@@ -78,11 +78,11 @@ Paper Radar 是一个合规的跨学科学术材料元数据抓取项目。仓�
 
 当前活跃设计说明：
 
-- `docs/specs/v0.7.3-topics-scoring-calibration.md`
+- `docs/specs/v0.7.4-report-duplicate-noise-suppression.md`
 
 当前活跃执行计划：
 
-- `docs/plans/v0.7.3-topics-scoring-calibration.md`
+- `docs/plans/v0.7.4-report-duplicate-noise-suppression.md`
 
 关键源码入口：
 

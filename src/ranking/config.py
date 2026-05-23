@@ -9,7 +9,7 @@ DEFAULT_SCORING_CONFIG: dict[str, Any] = {
         "enabled": True,
         "weights": {
             "metadata": {
-                "has_abstract": 8,
+                "has_abstract": 6,
                 "has_identifier": 4,
                 "has_url": 2,
                 "has_canonical_id": 1,
@@ -35,12 +35,13 @@ DEFAULT_SCORING_CONFIG: dict[str, Any] = {
                 "cross_domain_signal": 2,
                 "review_or_survey_signal": 3,
                 "benchmark_only_penalty": -2,
-                "missing_abstract_penalty": -3,
+                "repository_like_penalty": -4,
+                "missing_abstract_penalty": -6,
                 "too_short_metadata_penalty": -2,
             },
         },
         "thresholds": {
-            "s_candidate_min": 18,
+            "s_candidate_min": 22,
             "a_candidate_min": 13,
             "b_candidate_min": 8,
             "c_candidate_min": 4,
@@ -78,6 +79,15 @@ DEFAULT_SCORING_CONFIG: dict[str, Any] = {
                 "marginal improvement",
                 "incremental improvement",
                 "sota",
+            ],
+            "repository_like_terms": [
+                "zenodo",
+                "figshare",
+                "dataverse",
+                "osf",
+                "open science framework",
+                "ieee dataport",
+                "repository",
             ],
         },
     }

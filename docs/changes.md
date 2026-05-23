@@ -6,6 +6,46 @@
 
 ### 决策
 
+落地 V0.7.4 report-stage duplicate / repository noise suppression。
+
+- 为什么：
+  - V0.7.3 第二轮真实运行把 `S_candidate` 从 74/80 降到 6/79，说明 topics/scoring 校准有效。
+  - 但报告中仍有 Zenodo-like 条目约 25 条，duplicate title groups 约 15 组，OpenAlex/arXiv mirror 和 Zenodo 多版本仍污染 weekly report。
+  - 当前优先在 report-stage selection 抑制污染，不改变 source crawling、SQLite schema 或 JSONL export。
+- 决定：
+  - 在 `src.ranking.scoring` 增加 repository-like signal 检测和 `content.repository_like_penalty`。
+  - 在 `config/scoring.yaml` 增加 `repository_like_penalty: -4` 和 `repository_like_terms`。
+  - 在 `src.ranking.balance` 增加 near-duplicate title suppression：规范化标题相同或高度相似时，只保留一个候选进入 selected。
+  - 被压下的标题近重复候选进入 downranked，reason 为 `Near-duplicate title`。
+  - 保留候选优先级：分数明显更高者优先；分数接近时优先 arXiv，其次非 repository-like OpenAlex，其次 repository-like OpenAlex。
+  - weekly report、reject/downrank log 和 score audit 复用同一 selection 行为。
+- 已实现：
+  - `src/ranking/scoring.py`
+  - `src/ranking/balance.py`
+  - `config/scoring.yaml`
+  - `tests/test_scoring.py`
+  - `docs/specs/v0.7.4-report-duplicate-noise-suppression.md`
+  - `docs/plans/v0.7.4-report-duplicate-noise-suppression.md`
+  - V0.7.3 活跃 spec/plan 已归档到 `docs/archive/specs/` 和 `docs/archive/plans/`。
+- 已拒绝的替代方案：
+  - 拒绝修改 source crawling 行为。
+  - 拒绝修改 SQLite schema 或 JSONL export 格式。
+  - 拒绝修改 `config/sources.yaml` 或启用新 source。
+  - 拒绝 PDF 下载、LLM ranking、LLM 摘要、Zotero、Obsidian、Anki、Telegram / Email、vector database。
+- 接受的风险或债务：
+  - 近重复标题抑制是 report-stage heuristic，可能压下同题系列论文；reject/downrank log 会显示原因，方便人工检查。
+  - repository-like penalty 只影响评分和报告选择，不删除候选、不改变本地库。
+- 取代关系：
+  - `docs/specs/v0.7.4-report-duplicate-noise-suppression.md` 取代 `docs/archive/specs/v0.7.3-topics-scoring-calibration.md` 作为当前活跃设计说明。
+  - `docs/plans/v0.7.4-report-duplicate-noise-suppression.md` 取代 `docs/archive/plans/v0.7.3-topics-scoring-calibration.md` 作为当前活跃执行计划。
+- 验证：
+  - `C:\Users\SeinoQ\.local\bin\uv.exe --cache-dir .uv-cache run --extra dev pytest -q tests/test_scoring.py --basetemp "$env:TEMP\paper-radar-pytest-codex"` 通过，结果为 10 passed。
+  - `C:\Users\SeinoQ\.local\bin\uv.exe --cache-dir .uv-cache run --extra dev pytest -q --basetemp "$env:TEMP\paper-radar-pytest-codex"` 通过，结果为 50 passed。
+
+## 2026-05-23
+
+### 决策
+
 落地 V0.7.3 topics 与 scoring 校准，基于 2026-W21 真实周运行产物收窄默认抓取种子并提高 S 级门槛。
 
 - 为什么：

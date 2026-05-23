@@ -2,11 +2,11 @@
 
 Paper Radar is a compliant cross-disciplinary academic metadata radar for personal use.
 
-The current version is V0.7.3. It collects recent academic metadata from official APIs and public APIs, normalizes records into one `PaperItem` model, stores them in SQLite, exports a JSONL candidate pool, and can generate a lightweight weekly Markdown candidate report with transparent rule-based candidate scoring, lane balance, and an optional reject/downrank log. V0.7.3 calibrates default topic seeds and scoring thresholds after the 2026-W21 real weekly run.
+The current version is V0.7.4. It collects recent academic metadata from official APIs and public APIs, normalizes records into one `PaperItem` model, stores them in SQLite, exports a JSONL candidate pool, and can generate a lightweight weekly Markdown candidate report with transparent rule-based candidate scoring, lane balance, duplicate-title suppression, repository-like penalties, and an optional reject/downrank log.
 
 It is not a general-purpose crawler, not a Google Scholar scraper, not a PDF downloader, and not a Zotero replacement.
 
-## V0.7.3 Capabilities
+## V0.7.4 Capabilities
 
 - Unified `PaperItem` model.
 - DOI, arXiv ID, title, and PMID-aware canonical ID generation.
@@ -30,9 +30,11 @@ It is not a general-purpose crawler, not a Google Scholar scraper, not a PDF dow
 - Empty-export protection in the main pipeline, with an explicit `--allow-empty-export` override.
 - Calibrated first keywords in `config/topics.yaml` so default source preview and crawling use narrower lane seeds.
 - Calibrated `config/scoring.yaml` to make `S_candidate` harder to reach and missing abstracts more costly.
+- Report-stage near-duplicate title suppression for weekly reports and score audits.
+- Repository-like venue/source penalty for Zenodo-like and similar records.
 - Pytest coverage for normalization, storage, enrichment, deduplication, diagnostics, PubMed, bioRxiv/medRxiv, source preview, empty-export protection, and report generation.
 
-## What V0.7.3 Does Not Do
+## What V0.7.4 Does Not Do
 
 - It does not scrape Google Scholar.
 - It does not scrape publisher HTML pages.
@@ -168,7 +170,7 @@ Edit:
 config/scoring.yaml
 ```
 
-V0.7 scoring is rule-based and explainable. It uses metadata completeness, freshness, source quality, lane keyword matches, simple cross-domain keyword overlap, review/survey signals, and simple noise penalties. Weights, thresholds, lane balance, reject behavior, and report detail settings are configurable.
+V0.7 scoring is rule-based and explainable. It uses metadata completeness, freshness, source quality, lane keyword matches, simple cross-domain keyword overlap, review/survey signals, repository-like penalties, and simple noise penalties. Weights, thresholds, lane balance, reject behavior, and report detail settings are configurable.
 
 Candidate levels such as `S_candidate`, `A_candidate`, `B_candidate`, and `C_candidate` are report-stage candidate levels only. They are not final weekly reading grades.
 

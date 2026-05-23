@@ -4,6 +4,8 @@ This index records archived design specs and execution plans. Archived files are
 
 ## 2026-05-23
 
+- `docs/archive/specs/v0.7.3-topics-scoring-calibration.md` was replaced by active spec `docs/specs/v0.7.4-report-duplicate-noise-suppression.md`.
+- `docs/archive/plans/v0.7.3-topics-scoring-calibration.md` was replaced by active plan `docs/plans/v0.7.4-report-duplicate-noise-suppression.md`.
 - `docs/archive/specs/v0.7.2-source-preview-empty-export-stabilization.md` was replaced by active spec `docs/specs/v0.7.3-topics-scoring-calibration.md`.
 - `docs/archive/plans/v0.7.2-source-preview-empty-export-stabilization.md` was replaced by active plan `docs/plans/v0.7.3-topics-scoring-calibration.md`.
 - `docs/archive/specs/v0.7.1-score-audit-calibration.md` was replaced by active spec `docs/specs/v0.7.2-source-preview-empty-export-stabilization.md`.

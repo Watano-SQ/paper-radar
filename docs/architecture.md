@@ -23,8 +23,8 @@ Paper Radar 用于合规地收集跨学科学术材料元数据，把不同官�
 11. Crossref 和 Semantic Scholar 可作为 enrichment 源处理已有条目，不作为默认发现源。
 12. `src.pipeline.dedup` 对当前收集条目和历史库做弱去重，疑似重复写入 `possible_duplicates`。
 13. `src.pipeline.export` 默认导出 `data/exports/candidates_<YYYY-WW>.jsonl`，目录和文件名模板可通过 runtime config 改变；如果本次收集为空，V0.7.2 起默认跳过导出以避免覆盖当前候选池，除非显式允许空导出。
-14. `src.report.weekly_candidates` 从 JSONL 导出生成周候选池 Markdown 报告，默认使用 V0.7 规则评分、lane balance 和可选 reject/downrank log。
-15. `src.report.score_audit` 从 JSONL 导出生成评分校准报告，复用同一 scoring 和 lane balance 逻辑，不修改 JSONL 或 SQLite。
+14. `src.report.weekly_candidates` 从 JSONL 导出生成周候选池 Markdown 报告，默认使用 V0.7 规则评分、near-duplicate title suppression、lane balance 和可选 reject/downrank log。
+15. `src.report.score_audit` 从 JSONL 导出生成评分校准报告，复用同一 scoring、near-duplicate title suppression 和 lane balance 逻辑，不修改 JSONL 或 SQLite。
 16. `src.diagnostics` 可读取 SQLite 和 exports 状态。
 
 ## 主要模块与职责
@@ -47,8 +47,8 @@ Paper Radar 用于合规地收集跨学科学术材料元数据，把不同官�
 - `src/diagnostics.py`：本地数据状态诊断。
 - `src/report/weekly_candidates.py`：从候选 JSONL 生成周候选池 Markdown 报告。
 - `src/report/score_audit.py`：从候选 JSONL 生成 score audit Markdown 校准报告。
-- `src/ranking/scoring.py`：规则评分和候选级别计算。
-- `src/ranking/balance.py`：duplicate 处理、lane balance、selected/rejected/downranked 决策。
+- `src/ranking/scoring.py`：规则评分、repository-like penalty 和候选级别计算。
+- `src/ranking/balance.py`：duplicate canonical ID 处理、near-duplicate title suppression、lane balance、selected/rejected/downranked 决策。
 - `src/ranking/rejects.py`：reject/downrank Markdown log 渲染。
 - `tests/`：pytest 测试。
 
@@ -109,6 +109,7 @@ V0.6.5 引入 `RuntimeConfig` 和 `AppPaths`，把路径解析集中在 `src.app
 
 V0.7 引入轻量、透明、可配置的 report-stage 规则评分层。评分只读取 JSONL 候选项中已有字段，不访问外部 API，不改变 SQLite schema，也不改变 JSONL export 格式。
 V0.7.3 根据 2026-W21 真实周运行校准默认 topics 和 scoring：每个 lane 的首位 keyword 更窄，`S_candidate` 阈值提高，摘要存在本身的加分降低，缺失摘要惩罚加重。
+V0.7.4 在 report-stage selection 中加入近重复标题抑制，并为 Zenodo-like / repository-like 记录增加可配置 penalty。被标题近重复规则压下的候选会进入 downranked，原因是 `Near-duplicate title`；这不修改 SQLite、JSONL export 或 source crawling。
 
 评分结果包含：
 

@@ -29,6 +29,7 @@ scoring:
       cross_domain_signal: 2
       review_or_survey_signal: 3
       benchmark_only_penalty: -2
+      repository_like_penalty: -4
       missing_abstract_penalty: -6
       too_short_metadata_penalty: -2
 
@@ -70,3 +71,11 @@ scoring:
       - marginal improvement
       - incremental improvement
       - sota
+    repository_like_terms:
+      - zenodo
+      - figshare
+      - dataverse
+      - osf
+      - open science framework
+      - ieee dataport
+      - repository

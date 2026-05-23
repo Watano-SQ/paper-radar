@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+import re
 from typing import Any
 
 from src.ranking.config import scoring_section
@@ -263,6 +264,14 @@ def _score_noise(
             _weight(weights, "content", "benchmark_only_penalty"),
             "benchmark-only / narrow technical update signal",
         )
+    if is_repository_like_candidate(candidate, signals):
+        _add_component(
+            components,
+            penalties,
+            "content.repository_like_penalty",
+            _weight(weights, "content", "repository_like_penalty"),
+            "repository-like venue/source signal",
+        )
     title_words = [word for word in title.split() if word]
     has_identifier = bool(candidate.get("doi") or candidate.get("arxiv_id") or candidate.get("pmid"))
     has_link = bool(candidate.get("url") or candidate.get("oa_url"))
@@ -300,6 +309,37 @@ def _candidate_level(total: float, thresholds: dict[str, Any]) -> str:
     if total >= float(thresholds.get("c_candidate_min", 4)):
         return "C_candidate"
     return "reject"
+
+
+def is_repository_like_candidate(candidate: dict[str, Any], signals: dict[str, Any] | None = None) -> bool:
+    terms = [str(term).casefold() for term in (signals or {}).get("repository_like_terms", [])]
+    if not terms:
+        terms = [
+            "zenodo",
+            "figshare",
+            "dataverse",
+            "osf",
+            "open science framework",
+            "ieee dataport",
+            "repository",
+        ]
+    text = " ".join(
+        [
+            _clean(candidate.get("title")),
+            _clean(candidate.get("venue")),
+            _clean(candidate.get("url")),
+            _clean(candidate.get("oa_url")),
+            _clean(candidate.get("doi")),
+            _clean(candidate.get("source_id")),
+        ]
+    ).casefold()
+    return any(term and term in text for term in terms)
+
+
+def normalize_title_for_dedupe(value: Any) -> str:
+    text = _clean(value).casefold()
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    return " ".join(text.split())
 
 
 def _lane_keywords(topics: dict[str, Any], lane: str) -> list[str]:
