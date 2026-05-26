@@ -71,6 +71,7 @@ Paper Radar 是一个合规的跨学科学术材料元数据抓取项目。仓�
 - `README.md`
 - `docs/architecture.md`
 - `docs/changes.md`
+- `docs/curation_guidelines.md`
 - `docs/testing.md`
 - `docs/specs/_template.md`
 - `docs/plans/_template.md`
@@ -131,10 +132,11 @@ Paper Radar 是一个合规的跨学科学术材料元数据抓取项目。仓�
 2. 再读 `docs/changes.md` 中最新且相关的条目，恢复近期决策和取代关系。
 3. 再读 `docs/specs/` 中当前活跃设计说明，恢复任务意图和设计边界；如果不存在当前活跃设计说明，则记录“需要人类补充”。
 4. 再读 `docs/plans/` 中当前活跃执行计划，恢复执行路线；如果不存在当前活跃执行计划，则记录“需要人类补充”。
-5. 只有在需要理解历史原因、被拒绝方案或已取代设计时，才查 `docs/archive/`。
-6. 不要从归档文件、旧文件名或过期计划中推断当前任务状态。
-7. 如果执行计划中存在“如果中断”小节，优先读取该小节恢复上次停下的位置。
-8. 如果无法判断当前状态，不要猜测，标记为“需要人类补充”。
+5. 如果任务涉及候选池审查、curated review、reading shortlist 或 weekly report 之后的人工/LLM 精筛，读取 `docs/curation_guidelines.md`。
+6. 只有在需要理解历史原因、被拒绝方案或已取代设计时，才查 `docs/archive/`。
+7. 不要从归档文件、旧文件名或过期计划中推断当前任务状态。
+8. 如果执行计划中存在“如果中断”小节，优先读取该小节恢复上次停下的位置。
+9. 如果无法判断当前状态，不要猜测，标记为“需要人类补充”。
 
 ## 文档同步规则
 
