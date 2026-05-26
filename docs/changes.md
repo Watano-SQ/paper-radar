@@ -2,6 +2,40 @@
 
 > 本文档按照日期倒序记录，也即最新日期在前。
 
+## 2026-05-26
+
+### 决策
+
+Add curation guidelines / activate curation layer。
+
+- 为什么：
+  - 用户不是单一专业领域研究者，而是跨学科泛读者；当前目标是通过泛读建立问题地图，而不是马上生成严格文献综述或客观最优论文榜单。
+  - 用户关注 embodied AI、symbol grounding、语言、符号、意义、意识、隐喻、认知语言学、现象学和文学性观念结构等交叉问题，需要判断“这篇东西对我有什么用”。
+  - 复杂价值判断不应继续硬编码进 `scoring.py`、`scoring.yaml` 或更多 if/else 规则；Paper Radar 的代码评分层应继续保持粗筛和可解释 report-stage selection。
+  - speculative / repository-like 条目不应被自动当作垃圾，也不应冒充可靠知识入口；它们需要在 curated review 中标注阅读姿态、可靠性风险和使用方式。
+- 决定：
+  - 将 `docs/curation_guidelines.md` 作为长期 curation 规范纳入保留文档索引。
+  - 明确 curation layer 位于 weekly report、reject/downrank log 和 score audit 之后，读取这些报告并产出 curated review、reading posture、shortlist 和配置建议。
+  - 明确 curation layer 不修改 source crawling、SQLite schema、JSONL export、`src/ranking/scoring.py` 或 `config/scoring.yaml`。
+  - 恢复候选池审查、curated review 或 reading shortlist 任务时，应读取 `docs/curation_guidelines.md`。
+- 已实现：
+  - `docs/curation_guidelines.md`
+  - `README.md`
+  - `AGENTS.md`
+  - `docs/architecture.md`
+  - `docs/changes.md`
+- 已拒绝的替代方案：
+  - 拒绝新增抓取源。
+  - 拒绝修改 source crawling、SQLite schema 或 JSONL export 格式。
+  - 拒绝下载 PDF、接入 Zotero / Obsidian / Anki、做 LLM ranking 或把 curation 变成自动 ranking 模块。
+  - 拒绝直接修改 `config/topics.yaml`、`config/scoring.yaml` 或 `config/sources.yaml`；配置建议只在 curated review 或后续任务中提出。
+- 接受的风险或债务：
+  - 当前 curation layer 是自然语言规范和人工/LLM 审查流程，不是可运行代码模块。
+  - curated review 的输出质量依赖输入报告质量和审查者是否遵守 guideline。
+- 验证：
+  - 本次是文档同步任务，未运行代码测试、真实抓取、source preview、report generation 或 score audit。
+  - `docs/testing.md` 已评估：本次没有新增或修改验证命令、运行流程、预期产物或环境设置，因此无需更新。
+
 ## 2026-05-23
 
 ### 决策

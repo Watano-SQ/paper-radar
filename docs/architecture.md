@@ -129,6 +129,12 @@ V0.7.1 引入 `src.report.score_audit`，用于真实周运行后的评分校准
 
 score audit 是分析层，不改变 source crawling、不修改 SQLite schema、不修改 JSONL export 格式，也不使用外部 API。
 
+## Curation Layer
+
+`docs/curation_guidelines.md` 定义 weekly report 之后的自然语言审查层。该层面向人工或 LLM 辅助的 curated review，输入通常是 `weekly_candidates_<YYYY-WW>.md`、`rejected_candidates_<YYYY-WW>.md` 和 `score_audit_<YYYY-WW>.md`，输出是面向用户阅读目标的 curated review、reading posture、shortlist 和配置建议。
+
+Curation layer 不改变 SQLite、不修改 JSONL export、不改变 source crawling，也不修改 `src/ranking/scoring.py` 或 `config/scoring.yaml`。复杂价值判断应留在 curation guideline 和人工/LLM 审查中，而不是继续硬编码进 report-stage scoring。
+
 ## 重要边界
 
 - OpenAlex、arXiv、PubMed、bioRxiv、medRxiv 是发现源客户端，但是否运行由 `config/sources.yaml` 控制。
@@ -137,6 +143,7 @@ score audit 是分析层，不改变 source crawling、不修改 SQLite schema�
 - source 客户端不负责发现项目根目录；需要写入 raw response 时只使用调用方传入的 `raw_dir`。
 - V0.7 scoring 是规则评分，不是 LLM 排名或机器学习推荐系统。
 - V0.7.1 score audit 是校准报告，不是推荐模型。
+- Curation layer 是 report-stage 之后的自然语言审查层，不是自动 ranking 模块。
 - 原始响应、数据库、导出和日志是运行产物，不是长期项目事实源。
 - 当前文档事实源在保留文档中；`docs/archive/` 只提供历史上下文。
 

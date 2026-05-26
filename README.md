@@ -332,6 +332,7 @@ Runtime artifacts are ignored by git except for placeholder files.
 - `AGENTS.md`: repository working rules, recovery protocol, and documentation sync rules.
 - `docs/architecture.md`: current architecture and module boundaries.
 - `docs/changes.md`: dated decisions, accepted tradeoffs, and verification notes.
+- `docs/curation_guidelines.md`: human/LLM curation guidance after weekly reports; it is not an automatic ranking module.
 - `docs/testing.md`: authoritative run and validation commands.
 - `data/AGENTS.md`: rules for runtime data, raw responses, exports, reports, and local databases.
 
